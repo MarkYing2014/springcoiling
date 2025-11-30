@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { CatmullRomCurve3, Vector3 } from 'three'
+import { CatmullRomCurve3, Vector3, Group } from 'three'
 import { useSpringStore } from '../../store/springStore'
 import { useProcessStore } from '../../stores/processStore'
 
@@ -120,6 +120,59 @@ function generateSpringOnlyPath(
   return points
 }
 
+/**
+ * 下落动画的弹簧组件
+ */
+function FallingSpring({ 
+  curve, 
+  wireDiameter 
+}: { 
+  curve: CatmullRomCurve3
+  wireDiameter: number 
+}): ReactNode {
+  const groupRef = useRef<Group>(null)
+  const [fallState, setFallState] = useState({ y: 0, vy: 0, rotation: 0 })
+
+  // 重置下落状态
+  useEffect(() => {
+    setFallState({ y: 0, vy: 0, rotation: 0 })
+  }, [])
+
+  // 下落动画
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+    
+    setFallState(prev => {
+      const gravity = 50  // 重力加速度
+      const newVy = prev.vy + gravity * delta
+      const newY = prev.y - newVy * delta
+      const newRotation = prev.rotation + delta * 2  // 旋转
+      
+      // 更新位置
+      groupRef.current!.position.y = newY
+      groupRef.current!.rotation.x = Math.PI / 2 + newRotation * 0.1
+      groupRef.current!.rotation.z = newRotation * 0.3
+      
+      return { y: newY, vy: newVy, rotation: newRotation }
+    })
+  })
+
+  return (
+    <group ref={groupRef} position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh>
+        <tubeGeometry
+          args={[curve, 256, wireDiameter / 2, 16, false]}
+        />
+        <meshStandardMaterial
+          color="#60a5fa"
+          metalness={0.7}
+          roughness={0.2}
+        />
+      </mesh>
+    </group>
+  )
+}
+
 export function SpringMesh(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
@@ -167,21 +220,13 @@ export function SpringMesh(): ReactNode {
     return null
   }
 
-  // 切断完成后（done状态）：显示独立的弹簧，可以有下落动画
+  // 切断完成后（done状态）：显示独立的弹簧，带下落动画
   if (currentPhase === 'done') {
     return (
-      <group position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
-        <mesh>
-          <tubeGeometry
-            args={[springOnlyCurve, 256, params.wireDiameter / 2, 16, false]}
-          />
-          <meshStandardMaterial
-            color="#60a5fa"  // 弹簧蓝色
-            metalness={0.7}
-            roughness={0.2}
-          />
-        </mesh>
-      </group>
+      <FallingSpring 
+        curve={springOnlyCurve} 
+        wireDiameter={params.wireDiameter} 
+      />
     )
   }
 

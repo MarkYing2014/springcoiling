@@ -68,30 +68,30 @@ function CenterPanel(): ReactNode {
  */
 function Arbor(): ReactNode {
   const params = useSpringStore((s) => s.params)
-  // 芯棒直径略小于弹簧内径
-  const arborRadius = (params.meanDiameter - params.wireDiameter) / 2 - 0.3
-  const safeRadius = Math.max(arborRadius, 1.5)
+  // 芯棒直径略小于弹簧内径，更细的芯棒
+  const arborRadius = (params.meanDiameter - params.wireDiameter) / 2 * 0.6
+  const safeRadius = Math.max(arborRadius, 1)
 
   return (
     <group>
       {/* 送线管道 - 穿过面板中心 */}
       <mesh position={[0, 0, -2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[4, 4, 10, 16]} />
+        <cylinderGeometry args={[2.5, 2.5, 10, 16]} />
         <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.6} />
       </mesh>
-      {/* 芯棒座 - 面板前方 */}
-      <mesh position={[0, 0, 6]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[6, 8, 6, 24]} />
+      {/* 芯棒座 - 面板前方，更小 */}
+      <mesh position={[0, 0, 5]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[4, 5, 4, 24]} />
         <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
       </mesh>
-      {/* 芯棒主体 - 延伸到爪臂工作区域 */}
-      <mesh position={[0, 0, 16]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[safeRadius, safeRadius, 16, 24]} />
+      {/* 芯棒主体 - 更细 */}
+      <mesh position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[safeRadius, safeRadius, 14, 24]} />
         <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.15} />
       </mesh>
-      {/* 芯棒尖端 - 成形点 */}
-      <mesh position={[0, 0, 26]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[safeRadius, 3, 24]} />
+      {/* 芯棒尖端 - 更小的锥形 */}
+      <mesh position={[0, 0, 24]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[safeRadius, 2, 24]} />
         <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.15} />
       </mesh>
     </group>

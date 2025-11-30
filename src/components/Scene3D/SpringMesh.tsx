@@ -131,7 +131,7 @@ function FallingSpring({
   wireDiameter: number 
 }): ReactNode {
   const groupRef = useRef<Group>(null)
-  const [fallState, setFallState] = useState({ y: 0, vy: 0, rotation: 0 })
+  const [, setFallState] = useState({ y: 0, vy: 0, rotation: 0 })
 
   // 重置下落状态
   useEffect(() => {

@@ -81,12 +81,50 @@ function generateUnifiedWirePath(
   return points
 }
 
+/**
+ * 生成仅螺旋弹簧路径（切断后的独立弹簧）
+ */
+function generateSpringOnlyPath(
+  meanDiameter: number,
+  wireDiameter: number,
+  pitch: number,
+  totalCoils: number
+): Vector3[] {
+  const points: Vector3[] = []
+  const radius = meanDiameter / 2
+  const samplesPerCoil = 36
+  const totalSamples = Math.ceil(totalCoils * samplesPerCoil)
+  
+  let axialPos = 0
+  
+  for (let i = 0; i <= totalSamples; i++) {
+    const coilNum = i / samplesPerCoil
+    const angle = coilNum * Math.PI * 2
+    
+    let currentPitch = pitch
+    if (coilNum < 1) {
+      currentPitch = wireDiameter * 1.1
+    } else if (coilNum > totalCoils - 1) {
+      currentPitch = wireDiameter * 1.1
+    }
+    
+    const x = radius * Math.cos(angle)
+    const z = radius * Math.sin(angle)
+    if (i > 0) {
+      axialPos += currentPitch / samplesPerCoil
+    }
+    
+    points.push(new Vector3(x, axialPos, z))
+  }
+  
+  return points
+}
+
 export function SpringMesh(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
   const tick = useProcessStore((s) => s.tick)
 
-  // 驱动动画更新
   useFrame((_, delta) => {
     tick(delta)
   })
@@ -95,13 +133,13 @@ export function SpringMesh(): ReactNode {
   const currentPhase = axisPositions?.currentPhase ?? 'idle'
   
   // 计算待加工的直线段长度
-  // 随着弹簧生成，直线段缩短（线材被消耗）
   const wirePerCoil = Math.PI * params.meanDiameter
   const usedWireLength = currentCoils * wirePerCoil
-  const baseFeedLength = 60  // 基础送线长度
+  const baseFeedLength = 60
   const remainingFeedLength = Math.max(10, baseFeedLength - usedWireLength * 0.3)
 
-  const curve = useMemo(() => {
+  // 统一曲线（直线+过渡+螺旋）- 用于加工过程
+  const unifiedCurve = useMemo(() => {
     const path = generateUnifiedWirePath(
       params.meanDiameter,
       params.wireDiameter,
@@ -113,27 +151,68 @@ export function SpringMesh(): ReactNode {
     return new CatmullRomCurve3(path)
   }, [params.meanDiameter, params.wireDiameter, params.pitch, currentCoils, params.totalCoils, remainingFeedLength])
 
-  // 空闲状态不显示线材
+  // 独立弹簧曲线（仅螺旋）- 用于切断后
+  const springOnlyCurve = useMemo(() => {
+    const path = generateSpringOnlyPath(
+      params.meanDiameter,
+      params.wireDiameter,
+      params.pitch,
+      params.totalCoils
+    )
+    return new CatmullRomCurve3(path)
+  }, [params.meanDiameter, params.wireDiameter, params.pitch, params.totalCoils])
+
+  // 空闲状态不显示
   if (currentPhase === 'idle') {
     return null
   }
 
-  /**
-   * 统一线材位置说明：
-   * - 线材从送线辊(Y负方向)延伸到成形点(Y=0)
-   * - 成形点处弯曲成螺旋
-   * - 螺旋向前(Y正方向)生长
-   * - rotation [Math.PI/2, 0, 0] 使Y轴变为Z轴
-   * - 成形点在机械臂工作区 (Z=10)
-   */
+  // 切断完成后（done状态）：显示独立的弹簧，可以有下落动画
+  if (currentPhase === 'done') {
+    return (
+      <group position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh>
+          <tubeGeometry
+            args={[springOnlyCurve, 256, params.wireDiameter / 2, 16, false]}
+          />
+          <meshStandardMaterial
+            color="#60a5fa"  // 弹簧蓝色
+            metalness={0.7}
+            roughness={0.2}
+          />
+        </mesh>
+      </group>
+    )
+  }
+
+  // 切割阶段：显示即将被切断的线材
+  if (currentPhase === 'cutting') {
+    return (
+      <group position={[0, 0, 10]} rotation={[Math.PI / 2, 0, 0]}>
+        {/* 即将切断的弹簧部分 */}
+        <mesh>
+          <tubeGeometry
+            args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
+          />
+          <meshStandardMaterial
+            color="#f59e0b"  // 橙色表示即将切断
+            metalness={0.8}
+            roughness={0.2}
+          />
+        </mesh>
+      </group>
+    )
+  }
+
+  // 加工过程：显示统一曲线（直线+过渡+螺旋）
   return (
     <group position={[0, 0, 10]} rotation={[Math.PI / 2, 0, 0]}>
       <mesh>
         <tubeGeometry
-          args={[curve, 256, params.wireDiameter / 2, 16, false]}
+          args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
         />
         <meshStandardMaterial
-          color="#78716c"  // 线材颜色（银灰色）
+          color="#78716c"  // 线材银灰色
           metalness={0.85}
           roughness={0.15}
         />

@@ -17,6 +17,7 @@ export type ProcessPhase =
   | 'end_closed_coil'   // 末端紧密圈
   | 'pre_cut'           // 切断准备
   | 'cutting'           // 切断动作
+  | 'done'              // 切断完成，弹簧独立
   | 'reset'             // 回位
 
 /** 轴标识符 */

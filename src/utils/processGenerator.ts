@@ -117,7 +117,18 @@ export function generateCompressionSpringProcess(
   const tCutEnd = t + timeCut
   t = tCutEnd
 
-  // 阶段 6: 回位
+  // 阶段 6: 切断完成（弹簧独立）
+  const timeDone = 0.5  // 展示完成状态
+  phases.push({
+    name: 'done',
+    displayName: '完成',
+    startTime: t,
+    endTime: t + timeDone,
+    description: '弹簧切断完成，独立脱落'
+  })
+  t += timeDone
+
+  // 阶段 7: 回位
   phases.push({
     name: 'reset',
     displayName: '回位',

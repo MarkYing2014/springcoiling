@@ -119,88 +119,63 @@ interface ArmProps {
  * 结构：凸轮摇臂（黑色弯曲）+ 滑轨（银色直线）+ 工具
  */
 function WorkArm({ angle, camSwing, extension, toolType, color }: ArmProps): ReactNode {
-  // 爪臂安装在面板前面，呈放射状指向中心
-  const mountRadius = 42  // 距离中心的半径
+  // 爪臂安装在面板前面，增加半径避免干涉
+  const mountRadius = 55  // 增加距离中心的半径
   const mountX = Math.cos(angle) * mountRadius
   const mountY = Math.sin(angle) * mountRadius
 
-  // 滑轨参数 - 向中心方向伸缩
-  const slideLength = 28
-  const slideTravel = 18  // 最大行程
+  // 滑轨参数 - 缩短长度避免干涉
+  const slideLength = 20
+  const slideTravel = 12  // 最大行程
   const slideOffset = extension * slideTravel  // 当前伸出量
 
   return (
-    // 工位臂整体位于芯棒前方 (Z=28)，工具在芯棒尖端前面工作
+    // 工位臂整体位于芯棒前方
     <group position={[mountX, mountY, 28]}>
       {/* 整个爪臂绕中心旋转，工具端指向中心 */}
       <group rotation={[0, 0, angle + Math.PI + camSwing]}>
         
-        {/* 爪臂底座 - 连接面板的支架 */}
-        <mesh position={[-5, 0, -8]}>
-          <boxGeometry args={[12, 8, 16]} />
+        {/* 爪臂底座 - 更小的支架 */}
+        <mesh position={[-3, 0, -6]}>
+          <boxGeometry args={[8, 5, 12]} />
           <meshStandardMaterial color="#374151" metalness={0.4} roughness={0.5} />
         </mesh>
 
-        {/* 凸轮/摇臂机构 - 驱动滑轨运动 */}
-        <group position={[-8, 0, 0]}>
-          {/* 凸轮盘 */}
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[8, 8, 4, 24]} />
-            <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
-          </mesh>
-          {/* 凸轮臂 */}
-          <mesh position={[6, 0, 0]} rotation={[0, 0, 0.2]}>
-            <boxGeometry args={[10, 5, 3]} />
-            <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
-          </mesh>
-        </group>
+        {/* 凸轮盘 - 更小 */}
+        <mesh position={[-6, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[5, 5, 3, 24]} />
+          <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
+        </mesh>
 
-        {/* 滑轨导轨 - 指向中心 */}
-        <mesh position={[slideLength / 2 - 2, 0, 0]}>
-          <boxGeometry args={[slideLength, 5, 4]} />
+        {/* 滑轨导轨 - 更窄 */}
+        <mesh position={[slideLength / 2, 0, 0]}>
+          <boxGeometry args={[slideLength, 3, 3]} />
           <meshStandardMaterial color="#d1d5db" metalness={0.7} roughness={0.2} />
         </mesh>
-        
-        {/* 滑轨侧边导条 */}
-        <mesh position={[slideLength / 2 - 2, 3.5, 0]}>
-          <boxGeometry args={[slideLength, 2, 5]} />
-          <meshStandardMaterial color="#9ca3af" metalness={0.6} roughness={0.3} />
-        </mesh>
-        <mesh position={[slideLength / 2 - 2, -3.5, 0]}>
-          <boxGeometry args={[slideLength, 2, 5]} />
-          <meshStandardMaterial color="#9ca3af" metalness={0.6} roughness={0.3} />
-        </mesh>
 
-        {/* 滑块 - 沿滑轨向中心移动 */}
-        <group position={[slideLength - 4 + slideOffset, 0, 0]}>
-          {/* 滑块本体 */}
+        {/* 滑块 - 更小 */}
+        <group position={[slideLength - 2 + slideOffset, 0, 0]}>
           <mesh>
-            <boxGeometry args={[8, 6, 6]} />
+            <boxGeometry args={[5, 4, 4]} />
             <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
           </mesh>
 
-          {/* 工具座 */}
-          <mesh position={[6, 0, 0]}>
-            <boxGeometry args={[5, 5, 5]} />
-            <meshStandardMaterial color="#64748b" metalness={0.5} roughness={0.4} />
-          </mesh>
-
-          {/* 工具头 - 向中心方向 */}
+          {/* 工具头 - 更小 */}
           {toolType === 'curveGuide' && (
-            <mesh position={[10, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[2.5, 2.5, 5, 16]} />
+            <mesh position={[5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[1.5, 1.5, 3, 16]} />
               <meshStandardMaterial color={color} metalness={0.7} roughness={0.25} />
             </mesh>
           )}
           {toolType === 'striker' && (
-            <mesh position={[10, 0, 0]}>
-              <boxGeometry args={[3, 4, 6]} />
+            <mesh position={[5, 0, 0]}>
+              <boxGeometry args={[2, 3, 4]} />
               <meshStandardMaterial color={color} metalness={0.6} roughness={0.35} />
             </mesh>
           )}
           {toolType === 'cutter' && (
-            <mesh position={[10, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[1.5, 8, 2.5]} />
+            <mesh position={[5, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
+              <boxGeometry args={[1, 5, 2]} />
               <meshStandardMaterial color={color} metalness={0.8} roughness={0.15} />
             </mesh>
           )}
@@ -214,37 +189,76 @@ function WorkArm({ angle, camSwing, extension, toolType, color }: ArmProps): Rea
 function FeedMechanism(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
+  
+  // 送线状态
   const feedPos = axisPositions?.feed ?? 0
-  const rotation = (feedPos / 10) * Math.PI
-
+  const currentPhase = axisPositions?.currentPhase ?? 'idle'
+  const currentCoils = axisPositions?.currentCoils ?? 0
+  
+  // 送线辊旋转 - 基于送线量
+  const rotation = (feedPos / 5) * Math.PI
+  
+  // 线材参数
   const wireRadius = params.wireDiameter / 2
+  
+  // 判断是否在送线（加工中）
+  const isFeeding = currentPhase !== 'idle' && currentPhase !== 'reset'
+  
+  // 线材从送线辊延伸到成形点的长度（动态）
+  const baseWireLength = 80  // 基础长度
+  const dynamicLength = isFeeding ? baseWireLength + currentCoils * 5 : baseWireLength
 
   return (
-    <group position={[0, 0, -50]}>
+    <group position={[0, 0, -30]}>
       {/* 送线辊架 - 面板后方 */}
-      <mesh position={[0, 0, -10]}>
-        <boxGeometry args={[40, 30, 15]} />
+      <mesh position={[0, 0, -25]}>
+        <boxGeometry args={[35, 25, 12]} />
         <meshStandardMaterial color="#334155" metalness={0.4} roughness={0.6} />
       </mesh>
-      {/* 上送线辊 */}
-      <mesh position={[0, 8, 0]} rotation={[0, 0, rotation]}>
-        <cylinderGeometry args={[6, 6, 35, 24]} />
+      
+      {/* 上送线辊 - 旋转动画 */}
+      <mesh position={[0, 6, -20]} rotation={[0, 0, rotation]}>
+        <cylinderGeometry args={[5, 5, 30, 24]} />
         <meshStandardMaterial color="#0d9488" metalness={0.7} roughness={0.3} />
       </mesh>
-      {/* 下送线辊 */}
-      <mesh position={[0, -8, 0]} rotation={[0, 0, -rotation]}>
-        <cylinderGeometry args={[6, 6, 35, 24]} />
+      {/* 送线辊纹理 */}
+      <mesh position={[0, 6, -20]} rotation={[0, 0, rotation]}>
+        <torusGeometry args={[5, 0.3, 8, 24]} />
+        <meshStandardMaterial color="#0f766e" metalness={0.6} roughness={0.4} />
+      </mesh>
+      
+      {/* 下送线辊 - 反向旋转 */}
+      <mesh position={[0, -6, -20]} rotation={[0, 0, -rotation]}>
+        <cylinderGeometry args={[5, 5, 30, 24]} />
         <meshStandardMaterial color="#0d9488" metalness={0.7} roughness={0.3} />
       </mesh>
-      {/* 导线管 - 从送线辊向前到面板 */}
-      <mesh position={[0, 0, 20]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[3, 3, 30, 12]} />
+      <mesh position={[0, -6, -20]} rotation={[0, 0, -rotation]}>
+        <torusGeometry args={[5, 0.3, 8, 24]} />
+        <meshStandardMaterial color="#0f766e" metalness={0.6} roughness={0.4} />
+      </mesh>
+      
+      {/* 导线管 - 从送线辊到面板 */}
+      <mesh position={[0, 0, -5]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[2.5, 2.5, 20, 12]} />
         <meshStandardMaterial color="#64748b" metalness={0.6} roughness={0.4} />
       </mesh>
-      {/* 进线线材 - 沿Z轴向前穿过面板中心 */}
-      <mesh position={[0, 0, 40]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[wireRadius, wireRadius, 40, 8]} />
-        <meshStandardMaterial color="#a8a29e" metalness={0.9} roughness={0.2} />
+      
+      {/* 线材 - 从送线辊穿过面板中心到成形区 */}
+      {isFeeding && (
+        <mesh position={[0, 0, dynamicLength / 2 - 20]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[wireRadius, wireRadius, dynamicLength, 8]} />
+          <meshStandardMaterial 
+            color="#a8a29e" 
+            metalness={0.9} 
+            roughness={0.2}
+          />
+        </mesh>
+      )}
+      
+      {/* 待送线材（后方储存的线材） */}
+      <mesh position={[0, 0, -40]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[wireRadius, wireRadius, 30, 8]} />
+        <meshStandardMaterial color="#78716c" metalness={0.8} roughness={0.3} />
       </mesh>
     </group>
   )

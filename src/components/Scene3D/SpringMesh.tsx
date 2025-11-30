@@ -91,13 +91,14 @@ export function SpringMesh(): ReactNode {
 
   /**
    * 弹簧位置说明（八爪机布局）：
-   * - 面板在后方 (Z=-30)
-   * - 芯棒较短，只在成形区 (Z=-30+4 到 Z=-30+26)
-   * - 弹簧从成形点开始，沿Z轴正方向生长，脱离芯棒
+   * - 机器组在 Z=-20
+   * - 芯棒尖端在 Z=-20+26=6
+   * - 成形点在芯棒尖端附近 (Z≈4)
+   * - 弹簧从成形点开始，沿Z轴正方向生长
    * - rotation [Math.PI/2, 0, 0] 使弹簧Y轴变为Z轴（向前）
    */
   return (
-    <group position={[0, 0, -4]} rotation={[Math.PI / 2, 0, 0]}>
+    <group position={[0, 0, 4]} rotation={[Math.PI / 2, 0, 0]}>
       <mesh>
         <tubeGeometry
           args={[curve, 256, params.wireDiameter / 2, 16, false]}

@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 html,
 body,
@@ -9,5 +7,10 @@ body,
 }
 
 body {
-  @apply m-0 bg-slate-950 text-slate-100 font-sans antialiased;
+  margin: 0;
+  background-color: rgb(2 6 23);
+  color: rgb(241 245 249);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

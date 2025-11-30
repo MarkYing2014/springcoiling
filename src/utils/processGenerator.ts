@@ -26,7 +26,6 @@ export function generateCompressionSpringProcess(
     activeCoils,
     totalCoils,
     pitch,
-    endType,
     feedSpeed
   } = params
 

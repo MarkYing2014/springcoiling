@@ -190,23 +190,13 @@ function FeedMechanism(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
   
-  // 送线状态
+  // 送线辊旋转 - 基于送线量和圈数
   const feedPos = axisPositions?.feed ?? 0
-  const currentPhase = axisPositions?.currentPhase ?? 'idle'
   const currentCoils = axisPositions?.currentCoils ?? 0
+  const rotation = ((feedPos + currentCoils * 10) / 5) * Math.PI
   
-  // 送线辊旋转 - 基于送线量
-  const rotation = (feedPos / 5) * Math.PI
-  
-  // 线材参数
+  // 线材参数（用于显示线材卷）
   const wireRadius = params.wireDiameter / 2
-  
-  // 判断是否在送线（加工中）
-  const isFeeding = currentPhase !== 'idle' && currentPhase !== 'reset'
-  
-  // 线材从送线辊延伸到成形点的长度（动态）
-  const baseWireLength = 80  // 基础长度
-  const dynamicLength = isFeeding ? baseWireLength + currentCoils * 5 : baseWireLength
 
   return (
     <group position={[0, 0, -30]}>
@@ -237,27 +227,18 @@ function FeedMechanism(): ReactNode {
         <meshStandardMaterial color="#0f766e" metalness={0.6} roughness={0.4} />
       </mesh>
       
-      {/* 导线管 - 从送线辊到面板 */}
+      {/* 导线管 - 从送线辊到面板中心 */}
       <mesh position={[0, 0, -5]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[2.5, 2.5, 20, 12]} />
         <meshStandardMaterial color="#64748b" metalness={0.6} roughness={0.4} />
       </mesh>
       
-      {/* 线材 - 从送线辊穿过面板中心到成形区 */}
-      {isFeeding && (
-        <mesh position={[0, 0, dynamicLength / 2 - 20]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[wireRadius, wireRadius, dynamicLength, 8]} />
-          <meshStandardMaterial 
-            color="#a8a29e" 
-            metalness={0.9} 
-            roughness={0.2}
-          />
-        </mesh>
-      )}
+      {/* 注意：线材现在由 SpringMesh 组件统一渲染 */}
+      {/* 包含直线段 + 过渡弧 + 螺旋弹簧，形成连续曲线 */}
       
-      {/* 待送线材（后方储存的线材） */}
-      <mesh position={[0, 0, -40]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[wireRadius, wireRadius, 30, 8]} />
+      {/* 待送线材卷（后方储存的线材） */}
+      <mesh position={[0, 0, -45]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[8, wireRadius * 2, 8, 32]} />
         <meshStandardMaterial color="#78716c" metalness={0.8} roughness={0.3} />
       </mesh>
     </group>

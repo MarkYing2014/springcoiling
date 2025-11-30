@@ -6,58 +6,78 @@ import { useSpringStore } from '../../store/springStore'
 import { useProcessStore } from '../../stores/processStore'
 
 /**
- * 根据当前圈数生成弹簧路径
- * 生成均匀的螺旋线路径
+ * 生成统一的线材路径：直线段 + 过渡弧 + 螺旋弹簧
+ * 
+ * 这是一条连续的曲线，从送线辊出口到弹簧末端
+ * 随着加工进行，直线段缩短，螺旋段增长
  */
-function generateSpringPathByCoils(
+function generateUnifiedWirePath(
   meanDiameter: number,
   wireDiameter: number,
   pitch: number,
   currentCoils: number,
-  totalCoils: number
+  totalCoils: number,
+  feedLength: number  // 待加工的直线段长度
 ): Vector3[] {
   const points: Vector3[] = []
   const radius = meanDiameter / 2
   
-  // 计算实际要渲染的圈数
+  // === 第一段：直线段（从送线辊到成形点）===
+  // 直线沿 -Y 方向延伸（弹簧沿 +Y 方向生长）
+  const straightSamples = 20
+  for (let i = 0; i < straightSamples; i++) {
+    const t = i / straightSamples
+    // 从远处(-feedLength)到成形点(0)
+    const y = -feedLength * (1 - t)
+    points.push(new Vector3(0, y, 0))
+  }
+  
+  // === 第二段：过渡弧（直线开始弯曲成螺旋）===
+  // 从直线(0,0,0)过渡到第一圈螺旋的起点
+  const transitionSamples = 12
+  for (let i = 1; i <= transitionSamples; i++) {
+    const t = i / transitionSamples
+    // 逐渐从中心(0)移动到螺旋半径
+    const currentRadius = radius * t
+    // 沿螺旋方向转一小段角度
+    const angle = t * Math.PI * 0.25  // 转45度作为过渡
+    const x = currentRadius * Math.cos(angle)
+    const z = currentRadius * Math.sin(angle)
+    // 轴向略微前进
+    const y = t * wireDiameter * 0.5
+    points.push(new Vector3(x, y, z))
+  }
+  
+  // === 第三段：螺旋弹簧段 ===
   const coilsToRender = Math.min(currentCoils, totalCoils)
-  if (coilsToRender <= 0.1) {
-    return [new Vector3(0, 0, 0), new Vector3(0.1, 0, 0)]
-  }
-
-  // 每圈的采样点数 - 足够平滑
-  const samplesPerCoil = 36
-  const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
-
-  // 累积轴向位置
-  let axialPos = 0
-
-  for (let i = 0; i <= totalSamples; i++) {
-    const coilNum = i / samplesPerCoil  // 当前圈数（小数）
-    const angle = coilNum * Math.PI * 2
+  if (coilsToRender > 0.1) {
+    const samplesPerCoil = 36
+    const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    // 计算当前位置的螺距
-    let currentPitch = pitch
-    // 首圈和末圈可以紧密，中间圈正常螺距
-    if (coilNum < 1) {
-      currentPitch = wireDiameter * 1.1  // 首圈紧密
-    } else if (coilNum > totalCoils - 1 && totalCoils > 2) {
-      currentPitch = wireDiameter * 1.1  // 末圈紧密
-    }
+    // 起始位置（接续过渡段的末尾）
+    const startAngle = Math.PI * 0.25  // 过渡段结束的角度
+    let axialPos = wireDiameter * 0.5  // 过渡段结束的轴向位置
     
-    // X-Z平面上的圆周位置
-    const x = radius * Math.cos(angle)
-    const z = radius * Math.sin(angle)
-    
-    // Y方向是弹簧轴向（沿弹簧长度方向）
-    // 每个采样点增加 pitch/samplesPerCoil 的轴向距离
-    if (i > 0) {
+    for (let i = 1; i <= totalSamples; i++) {
+      const coilNum = i / samplesPerCoil
+      const angle = startAngle + coilNum * Math.PI * 2
+      
+      // 计算当前螺距
+      let currentPitch = pitch
+      if (coilNum < 1) {
+        currentPitch = wireDiameter * 1.1  // 首圈紧密
+      } else if (coilNum > totalCoils - 1 && totalCoils > 2) {
+        currentPitch = wireDiameter * 1.1  // 末圈紧密
+      }
+      
+      const x = radius * Math.cos(angle)
+      const z = radius * Math.sin(angle)
       axialPos += currentPitch / samplesPerCoil
+      
+      points.push(new Vector3(x, axialPos, z))
     }
-
-    points.push(new Vector3(x, axialPos, z))
   }
-
+  
   return points
 }
 
@@ -72,39 +92,49 @@ export function SpringMesh(): ReactNode {
   })
 
   const currentCoils = axisPositions?.currentCoils ?? 0
+  const currentPhase = axisPositions?.currentPhase ?? 'idle'
+  
+  // 计算待加工的直线段长度
+  // 随着弹簧生成，直线段缩短（线材被消耗）
+  const wirePerCoil = Math.PI * params.meanDiameter
+  const usedWireLength = currentCoils * wirePerCoil
+  const baseFeedLength = 60  // 基础送线长度
+  const remainingFeedLength = Math.max(10, baseFeedLength - usedWireLength * 0.3)
 
   const curve = useMemo(() => {
-    const path = generateSpringPathByCoils(
+    const path = generateUnifiedWirePath(
       params.meanDiameter,
       params.wireDiameter,
       params.pitch,
       currentCoils,
-      params.totalCoils
+      params.totalCoils,
+      remainingFeedLength
     )
     return new CatmullRomCurve3(path)
-  }, [params.meanDiameter, params.wireDiameter, params.pitch, currentCoils, params.totalCoils])
+  }, [params.meanDiameter, params.wireDiameter, params.pitch, currentCoils, params.totalCoils, remainingFeedLength])
 
-  // 如果还没有开始，不渲染弹簧
-  if (currentCoils < 0.1) {
+  // 空闲状态不显示线材
+  if (currentPhase === 'idle') {
     return null
   }
 
   /**
-   * 弹簧位置说明（八爪机布局）：
-   * - 机器组在 Z=-20
-   * - 机械臂在 Z=-20+30=10
-   * - 弹簧从成形点(Z=10)开始，向前生长
-   * - rotation [Math.PI/2, 0, 0] 使弹簧沿Z轴生长
+   * 统一线材位置说明：
+   * - 线材从送线辊(Y负方向)延伸到成形点(Y=0)
+   * - 成形点处弯曲成螺旋
+   * - 螺旋向前(Y正方向)生长
+   * - rotation [Math.PI/2, 0, 0] 使Y轴变为Z轴
+   * - 成形点在机械臂工作区 (Z=10)
    */
   return (
-    <group position={[0, 0, 12]} rotation={[Math.PI / 2, 0, 0]}>
+    <group position={[0, 0, 10]} rotation={[Math.PI / 2, 0, 0]}>
       <mesh>
         <tubeGeometry
           args={[curve, 256, params.wireDiameter / 2, 16, false]}
         />
         <meshStandardMaterial
-          color="#60a5fa"
-          metalness={0.7}
+          color="#78716c"  // 线材颜色（银灰色）
+          metalness={0.85}
           roughness={0.15}
         />
       </mesh>

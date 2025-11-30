@@ -130,8 +130,8 @@ function WorkArm({ angle, camSwing, extension, toolType, color }: ArmProps): Rea
   const slideOffset = extension * slideTravel
 
   return (
-    // 工位臂在成形区周围
-    <group position={[mountX, mountY, 8]}>
+    // 工位臂在弹簧尾端前方，工具在成形点工作
+    <group position={[mountX, mountY, 30]}>
       {/* 整个爪臂绕中心旋转，工具端指向中心 */}
       <group rotation={[0, 0, angle + Math.PI + camSwing]}>
         
@@ -366,11 +366,11 @@ function EightArmSystem(): ReactNode {
   )
 }
 
-/** 成形点指示 - 弹簧在芯棒尖端成形，工具在此工作 */
+/** 成形点指示 - 弹簧在机械臂工作区成形 */
 function FormingPointIndicator(): ReactNode {
   return (
-    <group position={[0, 0, 8]}>
-      {/* 发光环指示成形点 - 工具工作区 */}
+    <group position={[0, 0, 30]}>
+      {/* 发光环指示成形点 */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[12, 0.25, 8, 32]} />
         <meshStandardMaterial 

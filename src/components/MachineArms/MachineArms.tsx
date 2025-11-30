@@ -119,63 +119,63 @@ interface ArmProps {
  * 结构：凸轮摇臂（黑色弯曲）+ 滑轨（银色直线）+ 工具
  */
 function WorkArm({ angle, camSwing, extension, toolType, color }: ArmProps): ReactNode {
-  // 爪臂安装在面板前面，增加半径避免干涉
-  const mountRadius = 55  // 增加距离中心的半径
+  // 爪臂安装位置 - 需要够近以便工具能工作在弹簧成形区
+  const mountRadius = 28  // 距离中心的半径
   const mountX = Math.cos(angle) * mountRadius
   const mountY = Math.sin(angle) * mountRadius
 
-  // 滑轨参数 - 缩短长度避免干涉
-  const slideLength = 20
-  const slideTravel = 12  // 最大行程
-  const slideOffset = extension * slideTravel  // 当前伸出量
+  // 滑轨参数
+  const slideLength = 12
+  const slideTravel = 8  // 最大行程，伸出后工具接近弹簧
+  const slideOffset = extension * slideTravel
 
   return (
-    // 工位臂整体位于芯棒前方
-    <group position={[mountX, mountY, 28]}>
+    // 工位臂在成形区周围
+    <group position={[mountX, mountY, 8]}>
       {/* 整个爪臂绕中心旋转，工具端指向中心 */}
       <group rotation={[0, 0, angle + Math.PI + camSwing]}>
         
-        {/* 爪臂底座 - 更小的支架 */}
-        <mesh position={[-3, 0, -6]}>
-          <boxGeometry args={[8, 5, 12]} />
+        {/* 爪臂底座 - 紧凑 */}
+        <mesh position={[-2, 0, -3]}>
+          <boxGeometry args={[5, 3, 6]} />
           <meshStandardMaterial color="#374151" metalness={0.4} roughness={0.5} />
         </mesh>
 
-        {/* 凸轮盘 - 更小 */}
-        <mesh position={[-6, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[5, 5, 3, 24]} />
+        {/* 凸轮盘 - 紧凑 */}
+        <mesh position={[-4, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[3, 3, 2, 16]} />
           <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
         </mesh>
 
-        {/* 滑轨导轨 - 更窄 */}
+        {/* 滑轨导轨 */}
         <mesh position={[slideLength / 2, 0, 0]}>
-          <boxGeometry args={[slideLength, 3, 3]} />
+          <boxGeometry args={[slideLength, 2, 2]} />
           <meshStandardMaterial color="#d1d5db" metalness={0.7} roughness={0.2} />
         </mesh>
 
-        {/* 滑块 - 更小 */}
-        <group position={[slideLength - 2 + slideOffset, 0, 0]}>
+        {/* 滑块和工具 */}
+        <group position={[slideLength - 1 + slideOffset, 0, 0]}>
           <mesh>
-            <boxGeometry args={[5, 4, 4]} />
+            <boxGeometry args={[3, 2.5, 2.5]} />
             <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
           </mesh>
 
-          {/* 工具头 - 更小 */}
+          {/* 工具头 */}
           {toolType === 'curveGuide' && (
-            <mesh position={[5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[1.5, 1.5, 3, 16]} />
+            <mesh position={[3, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[1, 1, 2, 12]} />
               <meshStandardMaterial color={color} metalness={0.7} roughness={0.25} />
             </mesh>
           )}
           {toolType === 'striker' && (
-            <mesh position={[5, 0, 0]}>
-              <boxGeometry args={[2, 3, 4]} />
+            <mesh position={[3, 0, 0]}>
+              <boxGeometry args={[1.5, 2, 3]} />
               <meshStandardMaterial color={color} metalness={0.6} roughness={0.35} />
             </mesh>
           )}
           {toolType === 'cutter' && (
-            <mesh position={[5, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[1, 5, 2]} />
+            <mesh position={[3, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
+              <boxGeometry args={[0.8, 4, 1.5]} />
               <meshStandardMaterial color={color} metalness={0.8} roughness={0.15} />
             </mesh>
           )}
@@ -366,13 +366,13 @@ function EightArmSystem(): ReactNode {
   )
 }
 
-/** 成形点指示 - 弹簧在芯棒尖端前方成形 */
+/** 成形点指示 - 弹簧在芯棒尖端成形，工具在此工作 */
 function FormingPointIndicator(): ReactNode {
   return (
-    <group position={[0, 0, 28]}>
-      {/* 发光环指示成形点 - 在爪臂工作区域 */}
+    <group position={[0, 0, 8]}>
+      {/* 发光环指示成形点 - 工具工作区 */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[8, 0.3, 8, 32]} />
+        <torusGeometry args={[12, 0.25, 8, 32]} />
         <meshStandardMaterial 
           color="#22d3ee" 
           emissive="#22d3ee"

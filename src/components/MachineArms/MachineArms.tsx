@@ -272,8 +272,8 @@ function EightArmSystem(): ReactNode {
   // 动态位移（修正方向）
   // 成形杆：coilingPos越大，越靠近中心（半径越小）
   const formingRadius = Math.max(12, 25 - (coilingPos - R) * 0.3)
-  // 节距杆：pitchPos越大，沿+Z方向前进
-  const pitchZ = -pitchPos * 0.1
+  // 节距杆：pitchPos越大，沿+Z方向前进（向弹簧方向）
+  const pitchZ = pitchPos * 0.15
   // 切刀：cutPos越小，越靠近中心（向下）
   const cutY = (cutPos - 15) * 0.3
 

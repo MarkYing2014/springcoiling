@@ -67,6 +67,26 @@ export const useSpringStore = create<SpringState>((set) => ({
         newParams.innerDiameter = newParams.meanDiameter - newParams.wireDiameter
       }
       
+      // 切换弹簧类型时设置默认几何参数
+      if (key === 'type') {
+        if (value === 'conical' && !newParams.conicalGeometry) {
+          // 锥形弹簧默认值：小端10mm，大端20mm
+          newParams.conicalGeometry = {
+            smallOuterDiameter: 10,
+            largeOuterDiameter: 20,
+            fromSmallToLarge: true
+          }
+        }
+        if (value === 'variablePitch' && (!newParams.variablePitch || newParams.variablePitch.length === 0)) {
+          // 变节距弹簧默认值：前半紧密，后半疏松
+          newParams.variablePitch = [
+            { startTurn: 0, endTurn: 2, pitch: 3 },
+            { startTurn: 2, endTurn: 5, pitch: 6 },
+            { startTurn: 5, endTurn: 8, pitch: 4 }
+          ]
+        }
+      }
+      
       return { params: newParams }
     }),
   setCalculated: (value) => set(() => ({ calculated: value })),

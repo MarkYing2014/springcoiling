@@ -5,45 +5,102 @@ import { CatmullRomCurve3, Vector3, Group } from 'three'
 import { useSpringStore } from '../../store/springStore'
 import { useProcessStore } from '../../stores/processStore'
 
+import type { SpringParameters, VariablePitchSegment, ConicalGeometry } from '../../types'
+
+/**
+ * 根据弹簧类型计算当前圈的螺距
+ */
+function getPitchAtCoil(
+  coilNum: number,
+  totalCoils: number,
+  basePitch: number,
+  wireDiameter: number,
+  springType: string,
+  variablePitch?: VariablePitchSegment[]
+): number {
+  // 首圈和末圈紧密
+  if (coilNum < 1) {
+    return wireDiameter * 1.1
+  }
+  if (coilNum > totalCoils - 1 && totalCoils > 2) {
+    return wireDiameter * 1.1
+  }
+  
+  // 变节距弹簧
+  if (springType === 'variablePitch' && variablePitch && variablePitch.length > 0) {
+    for (const segment of variablePitch) {
+      if (coilNum >= segment.startTurn && coilNum <= segment.endTurn) {
+        return segment.pitch
+      }
+    }
+  }
+  
+  return basePitch
+}
+
+/**
+ * 根据弹簧类型计算当前圈的半径
+ */
+function getRadiusAtCoil(
+  coilNum: number,
+  totalCoils: number,
+  baseRadius: number,
+  springType: string,
+  conicalGeometry?: ConicalGeometry
+): number {
+  // 锥形弹簧
+  if (springType === 'conical' && conicalGeometry) {
+    const { smallOuterDiameter, largeOuterDiameter, fromSmallToLarge } = conicalGeometry
+    const smallRadius = smallOuterDiameter / 2
+    const largeRadius = largeOuterDiameter / 2
+    
+    const progress = coilNum / Math.max(totalCoils, 1)
+    
+    if (fromSmallToLarge) {
+      return smallRadius + (largeRadius - smallRadius) * progress
+    } else {
+      return largeRadius - (largeRadius - smallRadius) * progress
+    }
+  }
+  
+  return baseRadius
+}
+
 /**
  * 生成统一的线材路径：直线段 + 弯曲过渡 + 螺旋弹簧
  * 
- * 新布局（参照实际卷簧机）：
- * - 钢丝从左侧导向板水平进入（沿-X方向）
- * - 在芯轴处被圈径杆弯曲
- * - 绕芯轴形成螺旋，沿Z轴正方向生长
+ * 支持：
+ * - 压缩弹簧（compression）：等螺距等直径
+ * - 变节距弹簧（variablePitch）：螺距随圈数变化
+ * - 锥形弹簧（conical）：直径随圈数变化
  */
 function generateUnifiedWirePath(
-  meanDiameter: number,
-  wireDiameter: number,
-  pitch: number,
+  params: SpringParameters,
   currentCoils: number,
-  totalCoils: number,
   feedLength: number
 ): Vector3[] {
   const points: Vector3[] = []
-  const radius = meanDiameter / 2
+  const { meanDiameter, wireDiameter, pitch, totalCoils, type, variablePitch, conicalGeometry } = params
+  const baseRadius = meanDiameter / 2
   
   // === 第一段：水平直线段（从导向板到成形点）===
-  // 钢丝沿 -X 方向进入
   const straightSamples = 15
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
-    const x = -feedLength * (1 - t)  // 从-feedLength到0
+    const x = -feedLength * (1 - t)
     points.push(new Vector3(x, 0, 0))
   }
   
   // === 第二段：弯曲过渡（被圈径杆弯曲）===
-  // 钢丝在芯轴处开始弯曲，从水平变为绕芯轴旋转
   const bendSamples = 18
+  // 起始半径（可能因锥形而变化）
+  const startRadius = getRadiusAtCoil(0, totalCoils, baseRadius, type, conicalGeometry)
+  
   for (let i = 1; i <= bendSamples; i++) {
     const t = i / bendSamples
-    // 弯曲角度从0到90度
     const bendAngle = t * Math.PI * 0.5
-    // 逐渐形成圆弧
-    const x = radius * (1 - Math.cos(bendAngle))
-    const y = radius * Math.sin(bendAngle)
-    // 同时开始轴向移动
+    const x = startRadius * (1 - Math.cos(bendAngle))
+    const y = startRadius * Math.sin(bendAngle)
     const z = t * wireDiameter * 0.3
     points.push(new Vector3(x, y, z))
   }
@@ -54,25 +111,19 @@ function generateUnifiedWirePath(
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    // 起始位置（接续弯曲段的末尾）
-    const startAngle = Math.PI * 0.5  // 弯曲段结束在90度
+    const startAngle = Math.PI * 0.5
     let axialPos = wireDiameter * 0.3
     
     for (let i = 1; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
       const angle = startAngle + coilNum * Math.PI * 2
       
-      // 计算当前螺距
-      let currentPitch = pitch
-      if (coilNum < 1) {
-        currentPitch = wireDiameter * 1.1  // 首圈紧密
-      } else if (coilNum > totalCoils - 1 && totalCoils > 2) {
-        currentPitch = wireDiameter * 1.1  // 末圈紧密
-      }
+      // 获取当前圈的螺距和半径
+      const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
+      const currentRadius = getRadiusAtCoil(coilNum, totalCoils, baseRadius, type, conicalGeometry)
       
-      // X-Y平面上的圆周，Z方向轴向生长
-      const x = radius * Math.cos(angle)
-      const y = radius * Math.sin(angle)
+      const x = currentRadius * Math.cos(angle)
+      const y = currentRadius * Math.sin(angle)
       axialPos += currentPitch / samplesPerCoil
       
       points.push(new Vector3(x, y, axialPos))
@@ -84,16 +135,12 @@ function generateUnifiedWirePath(
 
 /**
  * 生成仅螺旋弹簧路径（切断后的独立弹簧）
- * X-Y平面圆周，Z轴方向生长
+ * 支持压缩、变节距、锥形弹簧
  */
-function generateSpringOnlyPath(
-  meanDiameter: number,
-  wireDiameter: number,
-  pitch: number,
-  totalCoils: number
-): Vector3[] {
+function generateSpringOnlyPath(params: SpringParameters): Vector3[] {
   const points: Vector3[] = []
-  const radius = meanDiameter / 2
+  const { meanDiameter, wireDiameter, pitch, totalCoils, type, variablePitch, conicalGeometry } = params
+  const baseRadius = meanDiameter / 2
   const samplesPerCoil = 36
   const totalSamples = Math.ceil(totalCoils * samplesPerCoil)
   
@@ -103,16 +150,12 @@ function generateSpringOnlyPath(
     const coilNum = i / samplesPerCoil
     const angle = coilNum * Math.PI * 2
     
-    let currentPitch = pitch
-    if (coilNum < 1) {
-      currentPitch = wireDiameter * 1.1
-    } else if (coilNum > totalCoils - 1) {
-      currentPitch = wireDiameter * 1.1
-    }
+    // 获取当前圈的螺距和半径
+    const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
+    const currentRadius = getRadiusAtCoil(coilNum, totalCoils, baseRadius, type, conicalGeometry)
     
-    // X-Y平面圆周，Z方向轴向生长
-    const x = radius * Math.cos(angle)
-    const y = radius * Math.sin(angle)
+    const x = currentRadius * Math.cos(angle)
+    const y = currentRadius * Math.sin(angle)
     if (i > 0) {
       axialPos += currentPitch / samplesPerCoil
     }
@@ -195,28 +238,17 @@ export function SpringMesh(): ReactNode {
   const remainingFeedLength = Math.max(10, baseFeedLength - usedWireLength * 0.3)
 
   // 统一曲线（直线+过渡+螺旋）- 用于加工过程
+  // 支持压缩、变节距、锥形弹簧
   const unifiedCurve = useMemo(() => {
-    const path = generateUnifiedWirePath(
-      params.meanDiameter,
-      params.wireDiameter,
-      params.pitch,
-      currentCoils,
-      params.totalCoils,
-      remainingFeedLength
-    )
+    const path = generateUnifiedWirePath(params, currentCoils, remainingFeedLength)
     return new CatmullRomCurve3(path)
-  }, [params.meanDiameter, params.wireDiameter, params.pitch, currentCoils, params.totalCoils, remainingFeedLength])
+  }, [params, currentCoils, remainingFeedLength])
 
   // 独立弹簧曲线（仅螺旋）- 用于切断后
   const springOnlyCurve = useMemo(() => {
-    const path = generateSpringOnlyPath(
-      params.meanDiameter,
-      params.wireDiameter,
-      params.pitch,
-      params.totalCoils
-    )
+    const path = generateSpringOnlyPath(params)
     return new CatmullRomCurve3(path)
-  }, [params.meanDiameter, params.wireDiameter, params.pitch, params.totalCoils])
+  }, [params])
 
   // 空闲状态不显示
   if (currentPhase === 'idle') {

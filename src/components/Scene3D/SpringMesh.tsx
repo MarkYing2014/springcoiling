@@ -275,7 +275,7 @@ export function SpringMesh(): ReactNode {
   // 切割阶段：显示即将被切断的线材（橙色）
   if (currentPhase === 'cutting') {
     return (
-      <group>
+      <group position={[0, 0, 15]}>
         <mesh>
           <tubeGeometry
             args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
@@ -290,10 +290,10 @@ export function SpringMesh(): ReactNode {
     )
   }
 
-  // 加工过程：显示统一曲线（直线+螺旋）
-  // 成形点在Z=0，弹簧沿+Z方向生长
+  // 加工过程：显示统一曲线
+  // 弹簧在机械臂前方(+Z)生成，避免干涉
   return (
-    <group>
+    <group position={[0, 0, 15]}>
       <mesh>
         <tubeGeometry
           args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}

@@ -3,44 +3,39 @@ import { useProcessStore } from '../../stores/processStore'
 import { useSpringStore } from '../../store/springStore'
 
 /**
- * 4+1轴压簧机 - 基于正确几何布局
+ * 4+1轴压簧机 - 标准坐标系
  * 
- * 几何原则（来自真实机床）：
- * - 导线方向 = 圆在切点T的切线方向
- * - 圆心C到送线直线的距离 = R（弹簧半径）
+ * 坐标系（观察者视角）：
+ * - 送线从后方(-Z)进入
+ * - 成形点在Z=0
+ * - 弹簧沿+Z方向生长（向观察者方向）
+ * - 螺旋在X-Y平面
  * 
- * 坐标系：
- * - 送线沿+X方向（从左到右）
- * - 切点T在(0, 0, 0)
- * - 圆心C在(0, R, 0)
- * - 螺旋沿+Z方向生长
- * 
- * 布局图（俯视）：
- *           +Y (圆心方向)
- *            ↑
- *            ○ C (芯棒/圆心)
- *           ╱
- *          ╱
- *   ━━━━━━●T ━━━━━━→ +X
- *   导线嘴  切点
+ * 侧视图（从+X看）：
+ *   线材卷 ── 送料轮 ── 导线嘴 ──●── 弹簧 ──→ +Z
+ *                              成形点
  */
 
 /** 机架底座 */
 function MachineFrame(): ReactNode {
   return (
-    <group position={[0, 10, -5]}>
-      {/* 主机架 - 在成形区上方 */}
+    <group position={[0, 0, -25]}>
+      {/* 主机架 */}
       <mesh>
-        <boxGeometry args={[50, 8, 30]} />
+        <boxGeometry args={[50, 40, 10]} />
         <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.6} />
+      </mesh>
+      {/* 成形区面板 */}
+      <mesh position={[0, 0, 8]}>
+        <boxGeometry args={[40, 35, 6]} />
+        <meshStandardMaterial color="#374151" metalness={0.5} roughness={0.4} />
       </mesh>
     </group>
   )
 }
 
 /**
- * F轴 - 送料机构
- * 从-X方向送入，沿+X方向到达切点
+ * F轴 - 送料机构（从-Z方向送入）
  */
 function FeedAxis(): ReactNode {
   const params = useSpringStore((s) => s.params)
@@ -51,38 +46,38 @@ function FeedAxis(): ReactNode {
   const rotation = ((feedPos + currentCoils * Math.PI * params.meanDiameter) / 10) * Math.PI
   
   return (
-    <group position={[-35, 0, 0]}>
+    <group position={[0, 0, -45]}>
       {/* 送料架 */}
-      <mesh position={[-10, 0, 0]}>
-        <boxGeometry args={[15, 18, 15]} />
+      <mesh position={[0, 0, -8]}>
+        <boxGeometry args={[25, 20, 12]} />
         <meshStandardMaterial color="#475569" metalness={0.4} roughness={0.5} />
       </mesh>
       
-      {/* 送料轮 - 绕Z轴旋转 */}
-      <mesh position={[-5, 4, 0]} rotation={[Math.PI / 2, 0, rotation]}>
-        <cylinderGeometry args={[3.5, 3.5, 12, 24]} />
+      {/* 送料轮（绕X轴旋转，推动线材沿Z轴前进）*/}
+      <mesh position={[0, 5, 0]} rotation={[rotation, 0, 0]}>
+        <cylinderGeometry args={[4, 4, 15, 24]} />
         <meshStandardMaterial color="#0d9488" metalness={0.7} roughness={0.3} />
       </mesh>
-      <mesh position={[-5, -4, 0]} rotation={[Math.PI / 2, 0, -rotation]}>
-        <cylinderGeometry args={[3.5, 3.5, 12, 24]} />
+      <mesh position={[0, -5, 0]} rotation={[-rotation, 0, 0]}>
+        <cylinderGeometry args={[4, 4, 15, 24]} />
         <meshStandardMaterial color="#0d9488" metalness={0.7} roughness={0.3} />
       </mesh>
       
-      {/* 导线管 - 沿X轴到达切点 */}
-      <mesh position={[15, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[1.5, 1.5, 25, 12]} />
+      {/* 导线管（沿Z轴延伸到成形点）*/}
+      <mesh position={[0, 0, 20]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[1.5, 1.5, 35, 12]} />
         <meshStandardMaterial color="#64748b" metalness={0.6} roughness={0.4} />
       </mesh>
       
-      {/* 导线嘴 - 在切点附近 */}
-      <mesh position={[30, 0, 0]}>
-        <boxGeometry args={[5, 4, 4]} />
+      {/* 导线嘴 */}
+      <mesh position={[0, 0, 40]}>
+        <boxGeometry args={[4, 4, 5]} />
         <meshStandardMaterial color="#10b981" metalness={0.6} roughness={0.3} />
       </mesh>
       
       {/* 线材卷 */}
-      <mesh position={[-25, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <torusGeometry args={[8, params.wireDiameter, 16, 32]} />
+      <mesh position={[0, 0, -25]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[10, params.wireDiameter, 16, 32]} />
         <meshStandardMaterial color="#78716c" metalness={0.8} roughness={0.3} />
       </mesh>
     </group>
@@ -90,28 +85,22 @@ function FeedAxis(): ReactNode {
 }
 
 /**
- * C轴 - 成形刀/芯棒
- * 位于圆心位置(0, R, 0)，钢丝绕此弯曲
+ * C轴 - 成形刀（在成形点侧面，控制直径）
  */
 function CoilingToolAxis(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const R = params.meanDiameter / 2
   
   return (
-    <group position={[0, R, 0]}>
-      {/* 芯棒/成形刀 - 钢丝绕此弯曲成圈 */}
+    <group position={[R + 8, 0, 0]}>
+      {/* 成形刀 */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[3, 3, 10, 24]} />
+        <cylinderGeometry args={[3, 3, 12, 24]} />
         <meshStandardMaterial color="#f59e0b" metalness={0.7} roughness={0.25} />
       </mesh>
-      {/* 沟槽 */}
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[3, 0.5, 8, 24]} />
-        <meshStandardMaterial color="#d97706" metalness={0.6} roughness={0.3} />
-      </mesh>
-      {/* 芯棒支架 */}
-      <mesh position={[0, 8, 0]}>
-        <boxGeometry args={[6, 12, 6]} />
+      {/* 刀座 */}
+      <mesh position={[6, 0, 0]}>
+        <boxGeometry args={[8, 8, 8]} />
         <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
       </mesh>
     </group>
@@ -119,78 +108,64 @@ function CoilingToolAxis(): ReactNode {
 }
 
 /**
- * P轴 - 螺距控制刀
- * 沿弹簧轴向（Z轴）移动，推动钢丝形成螺距
+ * P轴 - 螺距控制刀（在成形点对侧）
  */
 function PitchToolAxis(): ReactNode {
+  const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
-  
-  // P轴位置决定螺距
+  const R = params.meanDiameter / 2
   const pitchPos = axisPositions?.pitch ?? 0
   
   return (
-    <group position={[-15, 0, 0]}>
-      {/* 节距刀座 - 可沿Z轴移动 */}
-      <group position={[0, 0, pitchPos * 0.5]}>
+    <group position={[-(R + 8), 0, 0]}>
+      {/* 节距刀座 */}
+      <group position={[0, 0, pitchPos * 0.3]}>
         <mesh>
-          <boxGeometry args={[6, 5, 5]} />
+          <boxGeometry args={[5, 5, 5]} />
           <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
         </mesh>
-        
-        {/* 节距刀头 - 斜面推动钢丝 */}
-        <mesh position={[5, 0, 0]} rotation={[0, 0, Math.PI / 6]}>
-          <boxGeometry args={[8, 3, 4]} />
+        {/* 节距刀头 */}
+        <mesh position={[4, 0, 0]} rotation={[0, 0, Math.PI / 6]}>
+          <boxGeometry args={[6, 3, 4]} />
           <meshStandardMaterial color="#10b981" metalness={0.7} roughness={0.25} />
         </mesh>
       </group>
-      
-      {/* Z向导轨 */}
-      <mesh position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
-        <boxGeometry args={[3, 40, 3]} />
-        <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
+      {/* 刀座 */}
+      <mesh position={[-6, 0, 0]}>
+        <boxGeometry args={[8, 8, 8]} />
+        <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
       </mesh>
     </group>
   )
 }
 
 /**
- * K轴 - 切刀
- * 在弹簧完成后切断钢丝
+ * K轴 - 切刀（在成形点上方）
  */
 function CuttingAxis(): ReactNode {
   const axisPositions = useProcessStore((s) => s.axisPositions)
   const currentPhase = axisPositions?.currentPhase ?? 'idle'
-  
-  // 切割阶段时切刀伸出
-  const cutPos = currentPhase === 'cutting' ? 12 : 0
+  const cutPos = currentPhase === 'cutting' ? 10 : 0
   
   return (
-    <group position={[0, 20, 5]}>
+    <group position={[0, 18, 0]}>
       {/* 切刀座 */}
       <mesh position={[0, 8, 0]}>
-        <boxGeometry args={[8, 12, 5]} />
+        <boxGeometry args={[8, 10, 6]} />
         <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
       </mesh>
-      
-      {/* 切刀滑块 - 可向下移动 */}
+      {/* 切刀滑块 */}
       <group position={[0, -cutPos, 0]}>
         <mesh>
-          <boxGeometry args={[6, 5, 4]} />
+          <boxGeometry args={[5, 4, 4]} />
           <meshStandardMaterial color="#374151" metalness={0.6} roughness={0.3} />
         </mesh>
-        
         {/* 切刀刀片 */}
-        <mesh position={[0, -4, 0]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[1.5, 8, 2.5]} />
+        <mesh position={[0, -3, 0]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[1.5, 6, 2]} />
           <meshStandardMaterial color="#ef4444" metalness={0.8} roughness={0.15} />
         </mesh>
       </group>
-      
-      {/* 导轨 */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[3, 20, 3]} />
-        <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
-      </mesh>
     </group>
   )
 }

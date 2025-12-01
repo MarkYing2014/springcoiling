@@ -67,18 +67,24 @@ function getRadiusAtCoil(
 }
 
 /**
- * 生成正确几何的弹簧路径（基于真实机床原理）
+ * 生成弹簧路径 - 简单直观的坐标系
  * 
- * 核心原则：
- * - 导线方向 = 圆在切点T的切线方向
- * - 从切点开始，曲率立即为1/R（目标半径的曲率）
- * - 不会出现"先弯小再拉大"的错误过渡
+ * 坐标系（标准机床视角）：
+ * - 送线从后方(-Z)进入
+ * - 螺旋在X-Y平面
+ * - 弹簧沿+Z方向生长（向观察者方向）
  * 
- * 几何布局：
- * - 送线沿+X方向（从左到右）
- * - 切点T在(0, 0, 0)
- * - 圆心C在(0, R, 0)（T的正上方，距离=R）
- * - 螺旋沿+Z方向生长
+ * 俯视图（从+Z看向原点）：
+ *        +Y
+ *         ↑
+ *         │   
+ *   ──────┼──────→ +X
+ *         │ ○ 螺旋圈
+ *         │
+ * 
+ * 侧视图（从+X看）：
+ *   送线 ──────●──────→ 弹簧生长 (+Z)
+ *              成形点
  */
 function generateUnifiedWirePath(
   params: SpringParameters,
@@ -90,46 +96,33 @@ function generateUnifiedWirePath(
   const R = meanDiameter / 2
   
   // ============================================
-  // 段1: 极短直线送料（沿+X方向）
+  // 段1: 直线送料（从后方-Z进入）
   // ============================================
-  // 从(-feedLength, 0, 0)到切点T(0, 0, 0)
-  // 长度约0.5~1.0倍线径足够
-  const straightLength = Math.max(feedLength, wireDiameter * 2)
-  const straightSamples = 8
-  
+  const straightSamples = 10
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
-    const x = -straightLength * (1 - t)
-    points.push(new Vector3(x, 0, 0))
+    const z = -feedLength * (1 - t)  // 从-feedLength到0
+    points.push(new Vector3(0, 0, z))
   }
   
   // ============================================
-  // 段2: 第一圈圆弧（从切点开始，曲率=1/R）
+  // 段2: 螺旋弹簧（X-Y平面，沿+Z生长）
   // ============================================
-  // 圆心C = (0, R, 0)
-  // 起点T = (0, 0, 0)，在圆心正下方
-  // 从θ=-90°开始，逆时针绕圈
-  // 同时沿Z轴前进形成螺旋
-  
   const coilsToRender = Math.min(currentCoils, totalCoils)
   if (coilsToRender > 0.05) {
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    const centerY = R  // 圆心在(0, R, 0)
-    const startAngle = -Math.PI / 2  // 从-90°开始
-    
     for (let i = 0; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
-      const angle = startAngle + coilNum * Math.PI * 2
+      const angle = coilNum * Math.PI * 2
       
-      // 获取当前圈的参数
       const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
       const currentRadius = getRadiusAtCoil(coilNum, totalCoils, R, type, conicalGeometry)
       
-      // 绕圆心(0, R, 0)旋转
+      // 标准螺旋：X-Y平面圆周，Z轴前进
       const x = currentRadius * Math.cos(angle)
-      const y = centerY + currentRadius * Math.sin(angle)
+      const y = currentRadius * Math.sin(angle)
       const z = coilNum * currentPitch
       
       points.push(new Vector3(x, y, z))
@@ -273,7 +266,7 @@ export function SpringMesh(): ReactNode {
   // 切割阶段：显示即将被切断的线材（橙色）
   if (currentPhase === 'cutting') {
     return (
-      <group position={[0, 0, 20]}>
+      <group>
         <mesh>
           <tubeGeometry
             args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
@@ -288,10 +281,10 @@ export function SpringMesh(): ReactNode {
     )
   }
 
-  // 加工过程：显示统一曲线（直线+弯曲+螺旋）
-  // 弹簧在工具前方生成(Z=20)，避免与圈径杆等干涉
+  // 加工过程：显示统一曲线（直线+螺旋）
+  // 成形点在Z=0，弹簧沿+Z方向生长
   return (
-    <group position={[0, 0, 20]}>
+    <group>
       <mesh>
         <tubeGeometry
           args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}

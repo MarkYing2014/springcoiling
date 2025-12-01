@@ -1,184 +1,219 @@
 /**
  * Eight-Jaw Spring Forming Machine - 3D Model
  * 
- * Renders the virtual 8-jaw machine with:
- * - Base plate with center hole
- * - 8 radial rails
- * - Sliders on each rail
- * - Mounted tools on active jaws
+ * Uses VIRTUAL_EIGHT_JAW_MACHINE configuration
+ * Renders:
+ * - Forming center (cyan sphere)
+ * - Feed exit (green box + tube)
+ * - 8 jaws with rails, sliders, and tools
  * 
  * Does NOT touch spring rendering (SpringMesh.tsx)
  */
 
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
-import { eightJawMachineConfig, type JawConfig } from '../../config/machines/eightJawMachine'
-import { toolLibrary, type ToolType } from '../../config/tools/toolLibrary'
+import * as THREE from 'three'
+import { VIRTUAL_EIGHT_JAW_MACHINE, type VirtualJawConfig } from '../../config/machines/virtual-eight-jaw'
+import { getToolByKind, type ToolKind } from '../../config/tools'
 import { useProcessStore } from '../../stores/processStore'
+import { sampleJawAtTime } from '../../utils/jawKinematics'
+import type { JawId } from '../../types/machine'
 
 /**
- * Tool mesh component - renders the tool geometry
+ * Tool mesh component - renders tool based on kind
+ * All tools are modeled with their working axis along +X (for quaternion rotation)
  */
-function ToolMesh({ 
-  toolType, 
-  isActive = false 
-}: { 
-  toolType: ToolType
-  isActive?: boolean 
-}): ReactNode {
-  const tool = toolLibrary[toolType]
-  const { geometry, color, emissiveColor, metalness, roughness } = tool
+function ToolMesh({ toolKind }: { toolKind: ToolKind }): ReactNode {
+  const tool = getToolByKind(toolKind)
   
-  const rotation = geometry.rotation ?? [0, 0, 0]
-  
-  if (geometry.type === 'cylinder') {
-    return (
-      <mesh rotation={rotation as [number, number, number]}>
-        <cylinderGeometry args={[geometry.dimensions[0], geometry.dimensions[0], geometry.dimensions[1], 16]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={isActive ? emissiveColor : '#000000'}
-          emissiveIntensity={isActive ? 0.5 : 0}
-          metalness={metalness}
-          roughness={roughness}
-        />
-      </mesh>
-    )
+  switch (tool.kind) {
+    case 'coiling_pin':
+      // Orange cylinder - axis along +X
+      return (
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[1.5, 1.5, 10, 16]} />
+          <meshStandardMaterial color="#f97316" metalness={0.7} roughness={0.3} />
+        </mesh>
+      )
+    
+    case 'pitch_tool':
+      // Green thin box - long axis along +X
+      return (
+        <mesh>
+          <boxGeometry args={[8, 3, 4]} />
+          <meshStandardMaterial color="#22c55e" metalness={0.6} roughness={0.35} />
+        </mesh>
+      )
+    
+    case 'cutting_tool':
+      // Red thin blade - long axis along +X
+      return (
+        <mesh>
+          <boxGeometry args={[8, 1.5, 4]} />
+          <meshStandardMaterial color="#ef4444" metalness={0.8} roughness={0.2} />
+        </mesh>
+      )
+    
+    case 'guide':
+      // Purple block - face points along +X
+      return (
+        <mesh>
+          <boxGeometry args={[5, 3, 3]} />
+          <meshStandardMaterial color="#8b5cf6" metalness={0.4} roughness={0.5} />
+        </mesh>
+      )
+    
+    case 'idle':
+    default:
+      // Dark gray block
+      return (
+        <mesh>
+          <boxGeometry args={[3, 3, 3]} />
+          <meshStandardMaterial color="#4b5563" metalness={0.3} roughness={0.6} />
+        </mesh>
+      )
   }
-  
-  if (geometry.type === 'box') {
-    return (
-      <mesh rotation={rotation as [number, number, number]}>
-        <boxGeometry args={geometry.dimensions} />
-        <meshStandardMaterial
-          color={color}
-          emissive={isActive ? emissiveColor : '#000000'}
-          emissiveIntensity={isActive ? 0.6 : 0}
-          metalness={metalness}
-          roughness={roughness}
-        />
-      </mesh>
-    )
-  }
-  
-  return null
 }
 
 /**
  * Single Jaw component - rail + slider + tool
+ * Jaws arranged in X-Y plane, around Z-axis
+ * Layout: [Outside] --- Rail --- Slider --- Tool --- [Center]
+ * 
+ * Jaw position is driven by SpringRecipe keyframes via processStore
  */
-function Jaw({ 
-  config, 
-  currentPosition 
-}: { 
-  config: JawConfig
-  currentPosition: number 
-}): ReactNode {
-  const angleRad = (config.angleDeg * Math.PI) / 180
+function Jaw({ config }: { config: VirtualJawConfig }): ReactNode {
+  // Get current recipe and time from process store
+  const currentRecipe = useProcessStore((s) => s.currentRecipe)
+  const currentTime = useProcessStore((s) => s.currentTime)
   
-  // Calculate jaw position based on current stroke
-  const effectiveRadius = config.baseRadius - currentPosition
-  const x = effectiveRadius * Math.cos(angleRad)
-  const y = effectiveRadius * Math.sin(angleRad)
+  // Get jaw configuration
+  const basePos = useMemo(() => new THREE.Vector3(...config.basePosition), [config.basePosition])
+  
+  // Calculate rotation around Z-axis for rail/slider (local +X points outward)
+  const angleZ = Math.atan2(basePos.y, basePos.x)
+  
+  // Base radius from config
+  const baseRadius = basePos.length()
+  
+  // Get jaw position from recipe keyframes (in mm)
+  const jawPosition = sampleJawAtTime(currentRecipe, config.id as JawId, currentTime)
+  
+  // Calculate slider position: move towards center as jawPosition increases
+  // Subtract jawPosition because positive jawPosition means moving inward
+  const sliderOffset = baseRadius - 5 - jawPosition
+  
+  // Tool orientation - only coiling_pin needs special rotation
+  // Other tools are already aligned by the parent group's angleZ rotation
+  const toolRotation = useMemo((): [number, number, number] => {
+    if (config.mountedTool === 'coiling_pin') {
+      // Coiling pin should be tangential (perpendicular to radial direction)
+      // Rotate 90 degrees around Z axis from radial
+      return [0, 0, Math.PI / 2]
+    }
+    // Other tools: no additional rotation needed, they point radially inward
+    return [0, 0, 0]
+  }, [config.mountedTool])
   
   return (
     <group>
-      {/* Rail - fixed, extends from center outward */}
-      <group 
-        position={[
-          (config.baseRadius + 5) * Math.cos(angleRad),
-          (config.baseRadius + 5) * Math.sin(angleRad),
-          -3
-        ]}
-        rotation={[0, 0, angleRad]}
-      >
-        <mesh>
-          <boxGeometry args={[20, 4, 6]} />
+      {/* Rail - dark gray box, at outer position (static) */}
+      <group rotation={[0, 0, angleZ]}>
+        <mesh position={[baseRadius + 5, 0, basePos.z - 3]}>
+          <boxGeometry args={[18, 4, 6]} />
           <meshStandardMaterial color="#374151" metalness={0.5} roughness={0.4} />
         </mesh>
       </group>
       
-      {/* Slider - moves along rail */}
-      <group 
-        position={[x, y, 0]}
-        rotation={[0, 0, angleRad + Math.PI]}
-      >
-        {/* Slider body */}
-        <mesh position={[-4, 0, 0]}>
-          <boxGeometry args={[8, 5, 5]} />
-          <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
-        </mesh>
-        
-        {/* Tool mount */}
-        <group position={[2, 0, 0]}>
-          <ToolMesh toolType={config.mountedTool} isActive={config.active} />
-        </group>
-        
-        {/* Jaw label */}
-        {config.active && (
-          <mesh position={[-8, 0, 4]}>
-            <boxGeometry args={[2, 2, 0.5]} />
-            <meshStandardMaterial 
-              color={config.active ? '#22c55e' : '#64748b'} 
-              emissive={config.active ? '#22c55e' : '#000000'}
-              emissiveIntensity={0.3}
-            />
+      {/* Slider + Tool group (driven by recipe) */}
+      <group rotation={[0, 0, angleZ]}>
+        <group position={[sliderOffset, 0, basePos.z]}>
+          {/* Slider body */}
+          <mesh position={[3, 0, 0]}>
+            <boxGeometry args={[10, 5, 5]} />
+            <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
           </mesh>
-        )}
+          
+          {/* Tool mount - attached to slider, at inner end, same Z level */}
+          <group position={[-5, 0, 0]} rotation={toolRotation}>
+            <ToolMesh toolKind={config.mountedTool} />
+          </group>
+        </group>
       </group>
     </group>
   )
 }
 
 /**
- * Base plate with center hole - 垂直于Z轴（弹簧轴）
+ * Forming center indicator - cyan sphere
+ */
+function FormingCenter(): ReactNode {
+  const [x, y, z] = VIRTUAL_EIGHT_JAW_MACHINE.formingCenter
+  
+  return (
+    <mesh position={[x, y, z]}>
+      <sphereGeometry args={[2, 16, 16]} />
+      <meshStandardMaterial 
+        color="#22d3ee" 
+        emissive="#22d3ee"
+        emissiveIntensity={0.5}
+        transparent
+        opacity={0.8}
+      />
+    </mesh>
+  )
+}
+
+/**
+ * Feed exit indicator - green box + feed tube
+ */
+function FeedExit(): ReactNode {
+  const [x, y, z] = VIRTUAL_EIGHT_JAW_MACHINE.feedExit
+  const [dx, dy, dz] = VIRTUAL_EIGHT_JAW_MACHINE.feedDirection
+  
+  // Calculate rotation to align tube with feed direction
+  const angleX = Math.atan2(dy, dz)
+  const angleY = Math.atan2(dx, dz)
+  
+  return (
+    <group position={[x, y, z]}>
+      {/* Feed exit box */}
+      <mesh>
+        <boxGeometry args={[8, 8, 6]} />
+        <meshStandardMaterial color="#22c55e" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* Feed tube */}
+      <mesh position={[dx * 15, dy * 15, dz * 15]} rotation={[angleX + Math.PI / 2, angleY, 0]}>
+        <cylinderGeometry args={[2, 2, 25, 16]} />
+        <meshStandardMaterial color="#4b5563" metalness={0.6} roughness={0.3} />
+      </mesh>
+      
+      {/* Wire guide hole */}
+      <mesh position={[dx * 3, dy * 3, dz * 3]}>
+        <torusGeometry args={[1.5, 0.3, 8, 16]} />
+        <meshStandardMaterial color="#fbbf24" metalness={0.7} roughness={0.25} />
+      </mesh>
+    </group>
+  )
+}
+
+/**
+ * Base plate - perpendicular to Z axis
  */
 function BasePlate(): ReactNode {
   return (
-    <group position={[0, 0, -8]}>
-      {/* Main plate - 旋转使圆盘面朝Z轴 */}
+    <group position={[0, 0, -10]}>
+      {/* Main plate */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[45, 45, 6, 32]} />
+        <cylinderGeometry args={[50, 50, 6, 32]} />
         <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.6} />
       </mesh>
       
       {/* Center hole rim */}
       <mesh position={[0, 0, 3.5]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[10, 1, 8, 32]} />
+        <torusGeometry args={[12, 1.5, 8, 32]} />
         <meshStandardMaterial color="#111827" metalness={0.5} roughness={0.4} />
-      </mesh>
-      
-      {/* Center opening indicator */}
-      <mesh position={[0, 0, 4]}>
-        <ringGeometry args={[8, 10, 32]} />
-        <meshStandardMaterial 
-          color="#22d3ee" 
-          emissive="#22d3ee"
-          emissiveIntensity={0.3}
-          transparent
-          opacity={0.5}
-        />
-      </mesh>
-    </group>
-  )
-}
-
-/**
- * Forming zone indicator
- */
-function FormingZoneIndicator(): ReactNode {
-  return (
-    <group position={[0, 0, 0]}>
-      {/* Forming point ring */}
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[12, 0.2, 8, 32]} />
-        <meshStandardMaterial 
-          color="#22d3ee" 
-          emissive="#22d3ee"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.6}
-        />
       </mesh>
     </group>
   )
@@ -186,52 +221,26 @@ function FormingZoneIndicator(): ReactNode {
 
 /**
  * Main Eight-Jaw Machine Component
+ * Uses VIRTUAL_EIGHT_JAW_MACHINE configuration
  */
 export function EightJawMachine(): ReactNode {
-  const axisPositions = useProcessStore((s) => s.axisPositions)
-  
-  // Calculate jaw positions based on axis data
-  const jawPositions = useMemo(() => {
-    const positions: Record<string, number> = {}
-    const config = eightJawMachineConfig
-    
-    config.jaws.forEach((jaw) => {
-      // Map axis positions to jaw movements
-      let position = 0
-      
-      if (jaw.id === 'J1' && axisPositions?.coiling !== undefined) {
-        // J1 (coiling_pin) responds to coiling axis
-        position = Math.min(axisPositions.coiling * 0.5, jaw.stroke)
-      } else if (jaw.id === 'J2' && axisPositions?.pitch !== undefined) {
-        // J2 (pitch_tool) responds to pitch axis - moves along Z
-        position = Math.min(axisPositions.pitch * 0.1, jaw.stroke)
-      } else if (jaw.id === 'J3' && axisPositions?.cut !== undefined) {
-        // J3 (cutting_tool) responds to cut axis
-        position = Math.max(0, (30 - axisPositions.cut) * 0.5)
-      }
-      
-      positions[jaw.id] = position
-    })
-    
-    return positions
-  }, [axisPositions])
+  const machine = VIRTUAL_EIGHT_JAW_MACHINE
   
   return (
     <group>
       {/* Base plate */}
       <BasePlate />
       
-      {/* All 8 jaws */}
-      {eightJawMachineConfig.jaws.map((jaw) => (
-        <Jaw 
-          key={jaw.id} 
-          config={jaw} 
-          currentPosition={jawPositions[jaw.id] ?? 0}
-        />
-      ))}
+      {/* Forming center indicator */}
+      <FormingCenter />
       
-      {/* Forming zone indicator */}
-      <FormingZoneIndicator />
+      {/* Feed exit */}
+      <FeedExit />
+      
+      {/* All 8 jaws */}
+      {machine.jaws.map((jaw) => (
+        <Jaw key={jaw.id} config={jaw} />
+      ))}
     </group>
   )
 }

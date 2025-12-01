@@ -166,3 +166,6 @@ export interface SimulationState {
   /** 理论节拍时间，单位秒（若尚未计算则为 undefined） */
   estimatedCycleTimeSec?: number
 }
+
+// Re-export machine types
+export * from './machine'

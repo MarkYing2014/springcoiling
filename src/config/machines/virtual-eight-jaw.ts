@@ -61,17 +61,18 @@ const JAW_TOOLS: Record<JawId, ToolKind> = {
 }
 
 /**
- * Calculate base position from angle (around Y-axis)
+ * Calculate base position from angle (around Z-axis)
+ * Jaws arranged in X-Y plane, spring grows along +Z
  * @param angleDeg - Angle in degrees
  * @param radius - Distance from center
  */
 function calculateBasePosition(angleDeg: number, radius: number): [number, number, number] {
   const rad = (angleDeg * Math.PI) / 180
-  // Jaws arranged in X-Z plane, around Y-axis
+  // Jaws arranged in X-Y plane, around Z-axis
   return [
     radius * Math.cos(rad),
-    0,
     radius * Math.sin(rad),
+    0,
   ]
 }
 
@@ -81,11 +82,11 @@ function calculateBasePosition(angleDeg: number, radius: number): [number, numbe
  */
 function calculateBaseDirection(angleDeg: number): [number, number, number] {
   const rad = (angleDeg * Math.PI) / 180
-  // Direction points inward (towards center)
+  // Direction points inward (towards center) in X-Y plane
   return [
     -Math.cos(rad),
-    0,
     -Math.sin(rad),
+    0,
   ]
 }
 

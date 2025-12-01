@@ -6,7 +6,9 @@
 
 import { create } from 'zustand'
 import type { CompressionSpringProcess, AxisPositions, ProcessInputParams } from '../types/process'
+import type { SpringRecipe } from '../types/machine'
 import { generateCompressionSpringProcess, interpolateAxisPositions } from '../utils/processGenerator'
+import { SAMPLE_COMPRESSION_RECIPE } from '../config/recipes/sampleCompressionRecipe'
 
 interface ProcessState {
   /** 当前工艺过程 */
@@ -19,6 +21,10 @@ interface ProcessState {
   playbackSpeed: number
   /** 当前各轴位置 */
   axisPositions: AxisPositions | null
+  /** 当前配方 (SpringRecipe) */
+  currentRecipe: SpringRecipe | null
+  /** 总时长 (秒) - 来自 process 或 recipe */
+  duration: number
 
   /** 根据参数生成工艺过程 */
   generateProcess: (params: ProcessInputParams) => void
@@ -34,6 +40,8 @@ interface ProcessState {
   setPlaybackSpeed: (speed: number) => void
   /** 更新帧（由动画循环调用） */
   tick: (deltaTime: number) => void
+  /** 设置当前配方 */
+  setCurrentRecipe: (recipe: SpringRecipe | null) => void
 }
 
 export const useProcessStore = create<ProcessState>((set, get) => ({
@@ -42,6 +50,8 @@ export const useProcessStore = create<ProcessState>((set, get) => ({
   isPlaying: false,
   playbackSpeed: 1.0,
   axisPositions: null,
+  currentRecipe: SAMPLE_COMPRESSION_RECIPE, // Initialize with sample recipe
+  duration: SAMPLE_COMPRESSION_RECIPE.totalCycleTime ?? 10.0,
 
   generateProcess: (params) => {
     const process = generateCompressionSpringProcess(params)
@@ -70,17 +80,28 @@ export const useProcessStore = create<ProcessState>((set, get) => ({
   setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
 
   tick: (deltaTime) => {
-    const { isPlaying, currentTime, process, playbackSpeed } = get()
-    if (!isPlaying || !process) return
+    const { isPlaying, currentTime, process, playbackSpeed, duration } = get()
+    if (!isPlaying) return
 
     let newTime = currentTime + deltaTime * playbackSpeed
     
-    // 循环播放
-    if (newTime >= process.totalCycleTime) {
+    // 循环播放 - use duration (from recipe or process)
+    const maxTime = process?.totalCycleTime ?? duration
+    if (newTime >= maxTime) {
       newTime = 0
     }
 
-    const axisPositions = interpolateAxisPositions(process, newTime)
+    // Update axis positions if process exists
+    const axisPositions = process ? interpolateAxisPositions(process, newTime) : null
     set({ currentTime: newTime, axisPositions })
-  }
+  },
+
+  setCurrentRecipe: (recipe) => {
+    const newDuration = recipe?.totalCycleTime ?? 10.0
+    set({ 
+      currentRecipe: recipe, 
+      duration: newDuration,
+      currentTime: 0,
+    })
+  },
 }))

@@ -83,21 +83,26 @@ function generateUnifiedWirePath(
   const { meanDiameter, wireDiameter, pitch, totalCoils, type, variablePitch, conicalGeometry } = params
   const baseRadius = meanDiameter / 2
   
-  // === 第一段：水平直线段（从导向板到成形点）===
+  // === 弹簧成形原理 ===
+  // 钢丝沿-Z方向进入（与弹簧轴向一致）
+  // 在成形点被圈径杆弯曲，形成X-Y平面的圆圈
+  // 弹簧沿Z轴正方向生长
+  
+  // === 第一段：直线送料（沿-Z方向进入）===
   const straightSamples = 12
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
-    const x = -feedLength * (1 - t)
-    points.push(new Vector3(x, 0, 0))
+    const z = -feedLength * (1 - t)  // 从-feedLength到0
+    points.push(new Vector3(0, 0, z))
   }
   
-  // === 第二段：螺旋弹簧（直接从原点开始）===
+  // === 第二段：螺旋弹簧（X-Y平面圆周，Z轴生长）===
   const coilsToRender = Math.min(currentCoils, totalCoils)
   if (coilsToRender > 0.05) {
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    let axialPos = 0
+    let axialPos = 0  // Z轴位置
     
     for (let i = 0; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
@@ -107,10 +112,11 @@ function generateUnifiedWirePath(
       const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
       const currentRadius = getRadiusAtCoil(coilNum, totalCoils, baseRadius, type, conicalGeometry)
       
-      // X-Y平面的圆周运动，Z轴轴向生长
+      // X-Y平面的圆周运动
       const x = currentRadius * Math.cos(angle)
       const y = currentRadius * Math.sin(angle)
       
+      // Z轴轴向生长
       if (i > 0) {
         axialPos += currentPitch / samplesPerCoil
       }

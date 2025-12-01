@@ -16,8 +16,9 @@ import { useSpringStore } from '../../store/springStore'
  *                              成形点
  */
 
-/** 机架底座 */
-function MachineFrame(): ReactNode {
+/** 机架底座 - 备用 */
+// @ts-ignore - 保留备用
+function _MachineFrame(): ReactNode {
   return (
     <group position={[0, 0, -25]}>
       {/* 主机架 */}
@@ -84,10 +85,9 @@ function FeedAxis(): ReactNode {
   )
 }
 
-/**
- * C轴 - 成形刀（在成形点侧面，控制直径）
- */
-function CoilingToolAxis(): ReactNode {
+/** C轴 - 备用 */
+// @ts-ignore
+function _CoilingToolAxis(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const R = params.meanDiameter / 2
   
@@ -107,10 +107,9 @@ function CoilingToolAxis(): ReactNode {
   )
 }
 
-/**
- * P轴 - 螺距控制刀（在成形点对侧）
- */
-function PitchToolAxis(): ReactNode {
+/** P轴 - 备用 */
+// @ts-ignore
+function _PitchToolAxis(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
   const R = params.meanDiameter / 2
@@ -139,10 +138,9 @@ function PitchToolAxis(): ReactNode {
   )
 }
 
-/**
- * K轴 - 切刀（在成形点上方）
- */
-function CuttingAxis(): ReactNode {
+/** K轴 - 备用 */
+// @ts-ignore
+function _CuttingAxis(): ReactNode {
   const axisPositions = useProcessStore((s) => s.axisPositions)
   const currentPhase = axisPositions?.currentPhase ?? 'idle'
   const cutPos = currentPhase === 'cutting' ? 10 : 0
@@ -187,60 +185,129 @@ function FormingZone(): ReactNode {
           opacity={0.6}
         />
       </mesh>
-      {/* 弹簧生长方向指示 */}
-      <mesh position={[0, 0, 20]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[15, 0.15, 8, 32]} />
-        <meshStandardMaterial 
-          color="#a5f3fc" 
-          transparent
-          opacity={0.3}
-        />
+    </group>
+  )
+}
+
+/**
+ * 单个机械臂 - 静态展示
+ */
+function Arm({ angle, color, toolType }: { angle: number; color: string; toolType: 'rod' | 'blade' | 'roller' }): ReactNode {
+  const radius = 25  // 距离中心的半径
+  const x = radius * Math.cos(angle)
+  const y = radius * Math.sin(angle)
+  
+  return (
+    <group position={[x, y, 0]} rotation={[0, 0, angle + Math.PI]}>
+      {/* 滑轨底座 */}
+      <mesh position={[0, 0, -3]}>
+        <boxGeometry args={[6, 4, 8]} />
+        <meshStandardMaterial color="#374151" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* 臂体 */}
+      <mesh position={[-8, 0, 0]}>
+        <boxGeometry args={[12, 3, 4]} />
+        <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* 工具头 */}
+      {toolType === 'rod' && (
+        <mesh position={[-15, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[1.5, 1.5, 6, 16]} />
+          <meshStandardMaterial color={color} metalness={0.7} roughness={0.25} />
+        </mesh>
+      )}
+      {toolType === 'blade' && (
+        <mesh position={[-15, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[1, 5, 3]} />
+          <meshStandardMaterial color={color} metalness={0.8} roughness={0.15} />
+        </mesh>
+      )}
+      {toolType === 'roller' && (
+        <mesh position={[-15, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <cylinderGeometry args={[2, 2, 4, 16]} />
+          <meshStandardMaterial color={color} metalness={0.7} roughness={0.3} />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+/**
+ * 八爪机械臂系统 - 环形排列
+ */
+function EightArmSystem(): ReactNode {
+  // 8个臂的配置
+  const arms = [
+    { angle: 0, color: '#f59e0b', toolType: 'rod' as const },           // 0° - 成形杆 (黄)
+    { angle: Math.PI / 4, color: '#10b981', toolType: 'rod' as const },  // 45° - 节距杆 (绿)
+    { angle: Math.PI / 2, color: '#ef4444', toolType: 'blade' as const }, // 90° - 切刀 (红)
+    { angle: 3 * Math.PI / 4, color: '#8b5cf6', toolType: 'roller' as const }, // 135° - 辅助轮 (紫)
+    { angle: Math.PI, color: '#f59e0b', toolType: 'rod' as const },       // 180° - 成形杆 (黄)
+    { angle: 5 * Math.PI / 4, color: '#10b981', toolType: 'rod' as const }, // 225° - 节距杆 (绿)
+    { angle: 3 * Math.PI / 2, color: '#3b82f6', toolType: 'blade' as const }, // 270° - 备用刀 (蓝)
+    { angle: 7 * Math.PI / 4, color: '#8b5cf6', toolType: 'roller' as const }, // 315° - 辅助轮 (紫)
+  ]
+  
+  return (
+    <group>
+      {arms.map((arm, index) => (
+        <Arm key={index} angle={arm.angle} color={arm.color} toolType={arm.toolType} />
+      ))}
+    </group>
+  )
+}
+
+/**
+ * 中心面板 - 八爪机的中心
+ */
+function CenterPanel(): ReactNode {
+  return (
+    <group position={[0, 0, -5]}>
+      {/* 方形中心面板 */}
+      <mesh>
+        <boxGeometry args={[50, 50, 8]} />
+        <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.6} />
+      </mesh>
+      {/* 中心孔 */}
+      <mesh position={[0, 0, 5]}>
+        <cylinderGeometry args={[8, 8, 2, 32]} />
+        <meshStandardMaterial color="#111827" metalness={0.3} roughness={0.7} />
       </mesh>
     </group>
   )
 }
 
 /**
- * 主组件 - 4+1轴压簧机完整结构
+ * 主组件 - 八爪卷簧机
  * 
  * 布局：
- *                    K轴切刀(上方)
- *                       │
- *     ┌─────────────────┼─────────────────┐
- *     │                 ↓                 │
- *     │  P轴节距刀 ←── 成形点 ──→ C轴成形刀│
- *     │                 ↑                 │
- *     └─────────────────┼─────────────────┘
- *                       │
- *                   F轴送料
- *                       │
- *                    线材卷
- * 
+ *              臂2(45°)    臂1(0°)
+ *                 ╲        ╱
+ *     臂3(90°) ────●────── 臂0
+ *                 ╱        ╲
+ *              臂4        臂7(315°)
+ *                 
  * 坐标系：
- * - 钢丝从-Z方向进入
  * - 成形点在Z=0
  * - 弹簧沿+Z方向生长
+ * - 8个机械臂环形排列
  */
 export function MachineArms(): ReactNode {
   return (
     <group>
-      {/* 机架 */}
-      <MachineFrame />
+      {/* 中心面板 */}
+      <CenterPanel />
       
-      {/* F轴 - 送料机构 */}
-      <FeedAxis />
-      
-      {/* C轴 - 成形刀/直径控制 */}
-      <CoilingToolAxis />
-      
-      {/* P轴 - 螺距控制刀 */}
-      <PitchToolAxis />
-      
-      {/* K轴 - 切刀 */}
-      <CuttingAxis />
+      {/* 八爪机械臂系统 */}
+      <EightArmSystem />
       
       {/* 成形区指示 */}
       <FormingZone />
+      
+      {/* 保留送料机构 */}
+      <FeedAxis />
     </group>
   )
 }

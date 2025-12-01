@@ -222,9 +222,9 @@ function Arm({ angle, color, toolType, radiusOverride, yOffset = 0, zOffset = 0,
         <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
       </mesh>
       
-      {/* 工具头 */}
+      {/* 工具头 - 在内侧（靠近中心/弹簧） */}
       {toolType === 'rod' && (
-        <mesh position={[-15, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh position={[5, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[1.5, 1.5, 6, 16]} />
           <meshStandardMaterial
             color={color}
@@ -236,7 +236,7 @@ function Arm({ angle, color, toolType, radiusOverride, yOffset = 0, zOffset = 0,
         </mesh>
       )}
       {toolType === 'blade' && (
-        <mesh position={[-15, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
+        <mesh position={[5, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
           <boxGeometry args={[1, 5, 3]} />
           <meshStandardMaterial
             color={color}
@@ -248,7 +248,7 @@ function Arm({ angle, color, toolType, radiusOverride, yOffset = 0, zOffset = 0,
         </mesh>
       )}
       {toolType === 'roller' && (
-        <mesh position={[-15, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <mesh position={[5, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
           <cylinderGeometry args={[2, 2, 4, 16]} />
           <meshStandardMaterial color={color} metalness={0.7} roughness={0.3} />
         </mesh>

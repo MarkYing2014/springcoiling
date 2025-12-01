@@ -6,10 +6,12 @@ import { useSpringStore } from '../../store/springStore'
 import { useProcessStore } from '../../stores/processStore'
 
 /**
- * 生成统一的线材路径：直线段 + 过渡弧 + 螺旋弹簧
+ * 生成统一的线材路径：直线段 + 弯曲过渡 + 螺旋弹簧
  * 
- * 这是一条连续的曲线，从送线辊出口到弹簧末端
- * 随着加工进行，直线段缩短，螺旋段增长
+ * 新布局（参照实际卷簧机）：
+ * - 钢丝从左侧导向板水平进入（沿-X方向）
+ * - 在芯轴处被圈径杆弯曲
+ * - 绕芯轴形成螺旋，沿Z轴正方向生长
  */
 function generateUnifiedWirePath(
   meanDiameter: number,
@@ -17,34 +19,32 @@ function generateUnifiedWirePath(
   pitch: number,
   currentCoils: number,
   totalCoils: number,
-  feedLength: number  // 待加工的直线段长度
+  feedLength: number
 ): Vector3[] {
   const points: Vector3[] = []
   const radius = meanDiameter / 2
   
-  // === 第一段：直线段（从送线辊到成形点）===
-  // 直线沿 -Y 方向延伸（弹簧沿 +Y 方向生长）
-  const straightSamples = 20
+  // === 第一段：水平直线段（从导向板到成形点）===
+  // 钢丝沿 -X 方向进入
+  const straightSamples = 15
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
-    // 从远处(-feedLength)到成形点(0)
-    const y = -feedLength * (1 - t)
-    points.push(new Vector3(0, y, 0))
+    const x = -feedLength * (1 - t)  // 从-feedLength到0
+    points.push(new Vector3(x, 0, 0))
   }
   
-  // === 第二段：过渡弧（直线开始弯曲成螺旋）===
-  // 从直线(0,0,0)过渡到第一圈螺旋的起点
-  const transitionSamples = 12
-  for (let i = 1; i <= transitionSamples; i++) {
-    const t = i / transitionSamples
-    // 逐渐从中心(0)移动到螺旋半径
-    const currentRadius = radius * t
-    // 沿螺旋方向转一小段角度
-    const angle = t * Math.PI * 0.25  // 转45度作为过渡
-    const x = currentRadius * Math.cos(angle)
-    const z = currentRadius * Math.sin(angle)
-    // 轴向略微前进
-    const y = t * wireDiameter * 0.5
+  // === 第二段：弯曲过渡（被圈径杆弯曲）===
+  // 钢丝在芯轴处开始弯曲，从水平变为绕芯轴旋转
+  const bendSamples = 18
+  for (let i = 1; i <= bendSamples; i++) {
+    const t = i / bendSamples
+    // 弯曲角度从0到90度
+    const bendAngle = t * Math.PI * 0.5
+    // 逐渐形成圆弧
+    const x = radius * (1 - Math.cos(bendAngle))
+    const y = radius * Math.sin(bendAngle)
+    // 同时开始轴向移动
+    const z = t * wireDiameter * 0.3
     points.push(new Vector3(x, y, z))
   }
   
@@ -54,9 +54,9 @@ function generateUnifiedWirePath(
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    // 起始位置（接续过渡段的末尾）
-    const startAngle = Math.PI * 0.25  // 过渡段结束的角度
-    let axialPos = wireDiameter * 0.5  // 过渡段结束的轴向位置
+    // 起始位置（接续弯曲段的末尾）
+    const startAngle = Math.PI * 0.5  // 弯曲段结束在90度
+    let axialPos = wireDiameter * 0.3
     
     for (let i = 1; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
@@ -70,11 +70,12 @@ function generateUnifiedWirePath(
         currentPitch = wireDiameter * 1.1  // 末圈紧密
       }
       
+      // X-Y平面上的圆周，Z方向轴向生长
       const x = radius * Math.cos(angle)
-      const z = radius * Math.sin(angle)
+      const y = radius * Math.sin(angle)
       axialPos += currentPitch / samplesPerCoil
       
-      points.push(new Vector3(x, axialPos, z))
+      points.push(new Vector3(x, y, axialPos))
     }
   }
   
@@ -83,6 +84,7 @@ function generateUnifiedWirePath(
 
 /**
  * 生成仅螺旋弹簧路径（切断后的独立弹簧）
+ * X-Y平面圆周，Z轴方向生长
  */
 function generateSpringOnlyPath(
   meanDiameter: number,
@@ -108,13 +110,14 @@ function generateSpringOnlyPath(
       currentPitch = wireDiameter * 1.1
     }
     
+    // X-Y平面圆周，Z方向轴向生长
     const x = radius * Math.cos(angle)
-    const z = radius * Math.sin(angle)
+    const y = radius * Math.sin(angle)
     if (i > 0) {
       axialPos += currentPitch / samplesPerCoil
     }
     
-    points.push(new Vector3(x, axialPos, z))
+    points.push(new Vector3(x, y, axialPos))
   }
   
   return points
@@ -158,7 +161,7 @@ function FallingSpring({
   })
 
   return (
-    <group ref={groupRef} position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
+    <group ref={groupRef} position={[0, 0, 10]}>
       <mesh>
         <tubeGeometry
           args={[curve, 256, wireDiameter / 2, 16, false]}
@@ -230,17 +233,16 @@ export function SpringMesh(): ReactNode {
     )
   }
 
-  // 切割阶段：显示即将被切断的线材
+  // 切割阶段：显示即将被切断的线材（橙色）
   if (currentPhase === 'cutting') {
     return (
-      <group position={[0, 0, 10]} rotation={[Math.PI / 2, 0, 0]}>
-        {/* 即将切断的弹簧部分 */}
+      <group position={[0, 0, 5]}>
         <mesh>
           <tubeGeometry
             args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
           />
           <meshStandardMaterial
-            color="#f59e0b"  // 橙色表示即将切断
+            color="#f59e0b"
             metalness={0.8}
             roughness={0.2}
           />
@@ -249,15 +251,16 @@ export function SpringMesh(): ReactNode {
     )
   }
 
-  // 加工过程：显示统一曲线（直线+过渡+螺旋）
+  // 加工过程：显示统一曲线（直线+弯曲+螺旋）
+  // 位置在芯轴处，钢丝从左侧水平进入
   return (
-    <group position={[0, 0, 10]} rotation={[Math.PI / 2, 0, 0]}>
+    <group position={[0, 0, 5]}>
       <mesh>
         <tubeGeometry
           args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
         />
         <meshStandardMaterial
-          color="#78716c"  // 线材银灰色
+          color="#78716c"
           metalness={0.85}
           roughness={0.15}
         />

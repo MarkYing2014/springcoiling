@@ -1,359 +1,300 @@
 import type { ReactNode } from 'react'
-import { useMemo } from 'react'
 import { useProcessStore } from '../../stores/processStore'
 import { useSpringStore } from '../../store/springStore'
 
 /**
- * 数控万能八爪弹簧机（8工位爪臂）
- * 
- * 结构说明：
- * - 工作面板：圆形，8个工位爪臂呈放射状分布
- * - 爪臂：可正反向360°旋转，由凸轮片控制工作顺序
- * - 凸轮轴：通过凸轮片形状/角度决定各爪臂的进退时序
- * - 转芯轴：中心芯棒，弹簧绕其成形
- * - 送线轴：将线材送入成形区
- * 
- * 辅助工具（安装在爪臂上）：
- * - 曲线规：控制弹簧直径
- * - 折角器：制作折弯
- * - 撞刀：成形工具
- * - 切刀：切断线材
+ * 卷簧机 - 基于实际工作原理
  * 
  * 工作原理：
- * 1. 送线轴将线材送入成形区
- * 2. 凸轮轴旋转，各爪臂按凸轮角度依次进退
- * 3. 爪臂上的工具推动线材绕芯棒成形
- * 4. 弹簧逐圈生成并沿芯棒向前推出
+ * 1. 送线滚轮将钢丝从导向板穿入
+ * 2. 钢丝接触上/下圈径杆，形成3个摩擦点（导向板出口+上圈径杆+下圈径杆）
+ * 3. 在3个摩擦点的限位和导向下，钢丝弯曲变形，绕芯轴成形
+ * 4. 节距杆沿轴向移动，控制弹簧螺距
+ * 5. 切刀在芯轴配合下切断钢丝
+ * 
+ * 关键工具：
+ * - 芯轴（半圆形）：钢丝绕其弯曲成形
+ * - 上圈径杆：上弯曲点，控制弹簧直径
+ * - 下圈径杆：下弯曲点，控制弹簧直径
+ * - 节距杆：控制螺距
+ * - 切刀：切断钢丝
+ * - 导向板：引导钢丝进入成形区
  */
 
-/** 中心面板 - 方形金属面板 */
-function CenterPanel(): ReactNode {
+/** 机架底座 */
+function MachineBase(): ReactNode {
   return (
     <group>
-      {/* 主面板 - 方形，参照实际机器 */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[100, 100, 6]} />
-        <meshStandardMaterial color="#9ca3af" metalness={0.5} roughness={0.4} />
+      {/* 主机架 */}
+      <mesh position={[0, 0, -5]}>
+        <boxGeometry args={[80, 60, 10]} />
+        <meshStandardMaterial color="#374151" metalness={0.4} roughness={0.6} />
       </mesh>
-      {/* 面板边框 */}
-      <mesh position={[0, 0, 1]}>
-        <boxGeometry args={[104, 104, 2]} />
-        <meshStandardMaterial color="#6b7280" metalness={0.4} roughness={0.5} />
+      {/* 成形区面板 */}
+      <mesh position={[0, 0, 2]}>
+        <boxGeometry args={[50, 40, 4]} />
+        <meshStandardMaterial color="#4b5563" metalness={0.5} roughness={0.4} />
       </mesh>
-      {/* 中心成形区 - 带孔阵列 */}
-      <mesh position={[0, 0, 4]}>
-        <cylinderGeometry args={[18, 18, 4, 32]} />
-        <meshStandardMaterial color="#4b5563" metalness={0.6} roughness={0.3} />
-      </mesh>
-      {/* 中心孔阵列 */}
-      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
-        const angle = (i / 12) * Math.PI * 2
-        const r = 12
-        const x = Math.cos(angle) * r
-        const y = Math.sin(angle) * r
-        return (
-          <mesh key={i} position={[x, y, 5]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[2, 2, 6, 12]} />
-            <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
-          </mesh>
-        )
-      })}
     </group>
   )
 }
 
 /** 
- * 芯棒/转芯轴 - 从面板中心向前延伸到成形区
- * 弹簧线材从中间穿出，绕芯棒成形
+ * 半圆形芯轴 - 钢丝绕其外侧弯曲成形
+ * 参照图片：芯轴是半圆形，钢丝从导向板出来后绕芯轴弯曲
  */
-function Arbor(): ReactNode {
+function SemiCircularArbor(): ReactNode {
   const params = useSpringStore((s) => s.params)
-  // 芯棒直径略小于弹簧内径，更细的芯棒
-  const arborRadius = (params.meanDiameter - params.wireDiameter) / 2 * 0.6
-  const safeRadius = Math.max(arborRadius, 1)
+  // 芯轴半径 = 弹簧内径的一半
+  const arborRadius = (params.meanDiameter - params.wireDiameter) / 2
+  const safeRadius = Math.max(arborRadius, 3)
 
   return (
-    <group>
-      {/* 送线管道 - 穿过面板中心 */}
-      <mesh position={[0, 0, -2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[2.5, 2.5, 10, 16]} />
-        <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.6} />
+    <group position={[0, 0, 5]}>
+      {/* 芯轴座 */}
+      <mesh position={[0, 0, -2]}>
+        <cylinderGeometry args={[safeRadius + 3, safeRadius + 4, 4, 32]} />
+        <meshStandardMaterial color="#1f2937" metalness={0.5} roughness={0.4} />
       </mesh>
-      {/* 芯棒座 - 面板前方，更小 */}
-      <mesh position={[0, 0, 5]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[4, 5, 4, 24]} />
-        <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+      
+      {/* 半圆形芯轴主体 - 钢丝绕此成形 */}
+      <mesh position={[safeRadius / 2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[safeRadius, safeRadius, 3, 32, 1, false, 0, Math.PI]} />
+        <meshStandardMaterial 
+          color="#94a3b8" 
+          metalness={0.85} 
+          roughness={0.15}
+          side={2}  // DoubleSide
+        />
       </mesh>
-      {/* 芯棒主体 - 更细 */}
-      <mesh position={[0, 0, 15]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[safeRadius, safeRadius, 14, 24]} />
-        <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.15} />
-      </mesh>
-      {/* 芯棒尖端 - 更小的锥形 */}
-      <mesh position={[0, 0, 24]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[safeRadius, 2, 24]} />
+      
+      {/* 芯轴轴向延伸（弹簧推出方向） */}
+      <mesh position={[0, 0, 8]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[safeRadius * 0.3, safeRadius * 0.3, 12, 16]} />
         <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.15} />
       </mesh>
     </group>
   )
 }
 
-/** 工位爪臂配置 */
-interface ArmProps {
-  /** 工位编号 (0-7) */
-  index: number
-  /** 在面板上的角度位置 (弧度) */
-  angle: number
-  /** 凸轮摆动角度 */
-  camSwing: number
-  /** 滑轨伸出量 (0-1) */
-  extension: number
-  /** 安装的工具类型 */
-  toolType: 'curveGuide' | 'striker' | 'cutter' | 'none'
-  /** 工具颜色 */
-  color: string
-}
-
 /** 
- * 单个工位爪臂组件 - 参照真实机器照片
- * 结构：凸轮摇臂（黑色弯曲）+ 滑轨（银色直线）+ 工具
+ * 上圈径杆 - 从上方伸入，与导向板出口形成弯曲点
+ * 可移动以控制弹簧圈径
  */
-function WorkArm({ angle, camSwing, extension, toolType, color }: ArmProps): ReactNode {
-  // 爪臂安装位置 - 需要够近以便工具能工作在弹簧成形区
-  const mountRadius = 28  // 距离中心的半径
-  const mountX = Math.cos(angle) * mountRadius
-  const mountY = Math.sin(angle) * mountRadius
-
-  // 滑轨参数
-  const slideLength = 12
-  const slideTravel = 8  // 最大行程，伸出后工具接近弹簧
-  const slideOffset = extension * slideTravel
-
+function UpperCoilingRod(): ReactNode {
+  const params = useSpringStore((s) => s.params)
+  const axisPositions = useProcessStore((s) => s.axisPositions)
+  
+  // 圈径杆位置随弹簧直径变化
+  const coilingPos = axisPositions?.coiling ?? 10
+  const rodOffset = params.meanDiameter / 2 + 2
+  
   return (
-    // 工位臂在弹簧尾端前方，工具在成形点工作
-    <group position={[mountX, mountY, 30]}>
-      {/* 整个爪臂绕中心旋转，工具端指向中心 */}
-      <group rotation={[0, 0, angle + Math.PI + camSwing]}>
+    <group position={[rodOffset, 15, 5]}>
+      {/* 滑槽导轨 */}
+      <mesh position={[0, 10, 0]}>
+        <boxGeometry args={[4, 25, 3]} />
+        <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* 圈径杆滑块 */}
+      <group position={[0, -coilingPos * 0.5, 0]}>
+        <mesh>
+          <boxGeometry args={[5, 6, 4]} />
+          <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.3} />
+        </mesh>
         
-        {/* 爪臂底座 - 紧凑 */}
-        <mesh position={[-2, 0, -3]}>
-          <boxGeometry args={[5, 3, 6]} />
-          <meshStandardMaterial color="#374151" metalness={0.4} roughness={0.5} />
+        {/* 圈径杆头部 - 带沟槽，钢丝在此弯曲 */}
+        <mesh position={[0, -5, 0]} rotation={[0, 0, 0]}>
+          <cylinderGeometry args={[2, 2, 8, 16]} />
+          <meshStandardMaterial color="#f59e0b" metalness={0.7} roughness={0.25} />
         </mesh>
-
-        {/* 凸轮盘 - 紧凑 */}
-        <mesh position={[-4, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[3, 3, 2, 16]} />
-          <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
+        {/* 沟槽指示 */}
+        <mesh position={[0, -9, 0]}>
+          <torusGeometry args={[2, 0.5, 8, 16]} />
+          <meshStandardMaterial color="#d97706" metalness={0.6} roughness={0.3} />
         </mesh>
-
-        {/* 滑轨导轨 */}
-        <mesh position={[slideLength / 2, 0, 0]}>
-          <boxGeometry args={[slideLength, 2, 2]} />
-          <meshStandardMaterial color="#d1d5db" metalness={0.7} roughness={0.2} />
-        </mesh>
-
-        {/* 滑块和工具 */}
-        <group position={[slideLength - 1 + slideOffset, 0, 0]}>
-          <mesh>
-            <boxGeometry args={[3, 2.5, 2.5]} />
-            <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
-          </mesh>
-
-          {/* 工具头 */}
-          {toolType === 'curveGuide' && (
-            <mesh position={[3, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[1, 1, 2, 12]} />
-              <meshStandardMaterial color={color} metalness={0.7} roughness={0.25} />
-            </mesh>
-          )}
-          {toolType === 'striker' && (
-            <mesh position={[3, 0, 0]}>
-              <boxGeometry args={[1.5, 2, 3]} />
-              <meshStandardMaterial color={color} metalness={0.6} roughness={0.35} />
-            </mesh>
-          )}
-          {toolType === 'cutter' && (
-            <mesh position={[3, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
-              <boxGeometry args={[0.8, 4, 1.5]} />
-              <meshStandardMaterial color={color} metalness={0.8} roughness={0.15} />
-            </mesh>
-          )}
-        </group>
       </group>
     </group>
   )
 }
 
-/** 送线机构 - 从后方通过面板中心送线 */
-function FeedMechanism(): ReactNode {
+/** 
+ * 下圈径杆 - 从下方伸入，与导向板出口和上圈径杆形成3点弯曲
+ */
+function LowerCoilingRod(): ReactNode {
   const params = useSpringStore((s) => s.params)
   const axisPositions = useProcessStore((s) => s.axisPositions)
   
-  // 送线辊旋转 - 基于送线量和圈数
+  const coilingPos = axisPositions?.coiling ?? 10
+  const rodOffset = params.meanDiameter / 2 + 2
+  
+  return (
+    <group position={[rodOffset, -15, 5]}>
+      {/* 滑槽导轨 */}
+      <mesh position={[0, -10, 0]}>
+        <boxGeometry args={[4, 25, 3]} />
+        <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* 圈径杆滑块 */}
+      <group position={[0, coilingPos * 0.5, 0]}>
+        <mesh>
+          <boxGeometry args={[5, 6, 4]} />
+          <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.3} />
+        </mesh>
+        
+        {/* 圈径杆头部 */}
+        <mesh position={[0, 5, 0]}>
+          <cylinderGeometry args={[2, 2, 8, 16]} />
+          <meshStandardMaterial color="#f59e0b" metalness={0.7} roughness={0.25} />
+        </mesh>
+        {/* 沟槽 */}
+        <mesh position={[0, 9, 0]}>
+          <torusGeometry args={[2, 0.5, 8, 16]} />
+          <meshStandardMaterial color="#d97706" metalness={0.6} roughness={0.3} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+/** 
+ * 节距杆 - 沿弹簧轴线方向移动，控制螺距
+ * 钢丝接触节距杆斜面，被推动形成螺距
+ */
+function PitchTool(): ReactNode {
+  const axisPositions = useProcessStore((s) => s.axisPositions)
+  const pitchPos = axisPositions?.pitch ?? 0
+  
+  return (
+    <group position={[-15, 0, 5]}>
+      {/* 节距杆导轨（沿Z轴，即弹簧轴向） */}
+      <mesh position={[0, 0, 10]} rotation={[Math.PI / 2, 0, 0]}>
+        <boxGeometry args={[4, 25, 3]} />
+        <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* 节距杆滑块 */}
+      <group position={[0, 0, pitchPos * 0.3]}>
+        <mesh>
+          <boxGeometry args={[5, 5, 5]} />
+          <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.3} />
+        </mesh>
+        
+        {/* 节距杆头部 - 斜面 */}
+        <mesh position={[4, 0, 0]} rotation={[0, 0, Math.PI / 6]}>
+          <boxGeometry args={[6, 3, 4]} />
+          <meshStandardMaterial color="#10b981" metalness={0.7} roughness={0.25} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+/** 
+ * 切刀 - 在芯轴配合下切断钢丝
+ */
+function Cutter(): ReactNode {
+  const axisPositions = useProcessStore((s) => s.axisPositions)
+  const currentPhase = axisPositions?.currentPhase ?? 'idle'
+  
+  // 切割阶段时切刀伸出
+  const cutPos = currentPhase === 'cutting' ? 15 : 0
+  
+  return (
+    <group position={[0, 25, 8]}>
+      {/* 切刀导轨 */}
+      <mesh position={[0, 8, 0]}>
+        <boxGeometry args={[6, 20, 4]} />
+        <meshStandardMaterial color="#6b7280" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* 切刀滑块 */}
+      <group position={[0, -cutPos, 0]}>
+        <mesh>
+          <boxGeometry args={[8, 6, 5]} />
+          <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.3} />
+        </mesh>
+        
+        {/* 切刀刀片 */}
+        <mesh position={[0, -5, 0]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[1.5, 10, 3]} />
+          <meshStandardMaterial color="#ef4444" metalness={0.8} roughness={0.15} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+/** 
+ * 送线滚轮和导向板 - 将钢丝送入成形区
+ * 参照图片：滚轮在左侧，钢丝水平穿入导向板
+ */
+function FeedRollersAndGuide(): ReactNode {
+  const params = useSpringStore((s) => s.params)
+  const axisPositions = useProcessStore((s) => s.axisPositions)
+  
   const feedPos = axisPositions?.feed ?? 0
   const currentCoils = axisPositions?.currentCoils ?? 0
   const rotation = ((feedPos + currentCoils * 10) / 5) * Math.PI
-  
-  // 线材参数（用于显示线材卷）
   const wireRadius = params.wireDiameter / 2
 
   return (
-    <group position={[0, 0, -30]}>
-      {/* 送线辊架 - 面板后方 */}
-      <mesh position={[0, 0, -25]}>
-        <boxGeometry args={[35, 25, 12]} />
+    <group position={[-50, 0, 5]}>
+      {/* 送线辊架 */}
+      <mesh position={[-20, 0, 0]}>
+        <boxGeometry args={[15, 25, 10]} />
         <meshStandardMaterial color="#334155" metalness={0.4} roughness={0.6} />
       </mesh>
       
-      {/* 上送线辊 - 旋转动画 */}
-      <mesh position={[0, 6, -20]} rotation={[0, 0, rotation]}>
-        <cylinderGeometry args={[5, 5, 30, 24]} />
+      {/* 上送线辊 */}
+      <mesh position={[-20, 6, 0]} rotation={[Math.PI / 2, rotation, 0]}>
+        <cylinderGeometry args={[5, 5, 8, 24]} />
         <meshStandardMaterial color="#0d9488" metalness={0.7} roughness={0.3} />
       </mesh>
-      {/* 送线辊纹理 */}
-      <mesh position={[0, 6, -20]} rotation={[0, 0, rotation]}>
-        <torusGeometry args={[5, 0.3, 8, 24]} />
+      <mesh position={[-20, 6, 0]} rotation={[Math.PI / 2, rotation, 0]}>
+        <torusGeometry args={[5, 0.4, 8, 24]} />
         <meshStandardMaterial color="#0f766e" metalness={0.6} roughness={0.4} />
       </mesh>
       
-      {/* 下送线辊 - 反向旋转 */}
-      <mesh position={[0, -6, -20]} rotation={[0, 0, -rotation]}>
-        <cylinderGeometry args={[5, 5, 30, 24]} />
+      {/* 下送线辊 */}
+      <mesh position={[-20, -6, 0]} rotation={[Math.PI / 2, -rotation, 0]}>
+        <cylinderGeometry args={[5, 5, 8, 24]} />
         <meshStandardMaterial color="#0d9488" metalness={0.7} roughness={0.3} />
       </mesh>
-      <mesh position={[0, -6, -20]} rotation={[0, 0, -rotation]}>
-        <torusGeometry args={[5, 0.3, 8, 24]} />
+      <mesh position={[-20, -6, 0]} rotation={[Math.PI / 2, -rotation, 0]}>
+        <torusGeometry args={[5, 0.4, 8, 24]} />
         <meshStandardMaterial color="#0f766e" metalness={0.6} roughness={0.4} />
       </mesh>
       
-      {/* 导线管 - 从送线辊到面板中心 */}
-      <mesh position={[0, 0, -5]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[2.5, 2.5, 20, 12]} />
-        <meshStandardMaterial color="#64748b" metalness={0.6} roughness={0.4} />
+      {/* 导向板 - 钢丝穿过此处 */}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[20, 12, 8]} />
+        <meshStandardMaterial color="#475569" metalness={0.5} roughness={0.4} />
+      </mesh>
+      {/* 导向孔 */}
+      <mesh position={[10, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <cylinderGeometry args={[wireRadius + 0.5, wireRadius + 0.5, 5, 16]} />
+        <meshStandardMaterial color="#1f2937" metalness={0.3} roughness={0.7} />
       </mesh>
       
-      {/* 注意：线材现在由 SpringMesh 组件统一渲染 */}
-      {/* 包含直线段 + 过渡弧 + 螺旋弹簧，形成连续曲线 */}
-      
-      {/* 待送线材卷（后方储存的线材） */}
-      <mesh position={[0, 0, -45]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[8, wireRadius * 2, 8, 32]} />
+      {/* 待送线材卷 */}
+      <mesh position={[-40, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[12, wireRadius * 3, 16, 32]} />
         <meshStandardMaterial color="#78716c" metalness={0.8} roughness={0.3} />
       </mesh>
     </group>
   )
 }
 
-/** 八爪工位系统 - 8个工位爪臂 */
-function EightArmSystem(): ReactNode {
-  const axisPositions = useProcessStore((s) => s.axisPositions)
-
-  // 当前加工状态
-  const currentPhase = axisPositions?.currentPhase ?? 'idle'
-  const currentCoils = axisPositions?.currentCoils ?? 0
-
-  // 凸轮角度 - 基于当前圈数（每圈凸轮旋转360度）
-  const camAngle = (currentCoils % 1) * Math.PI * 2
-
-  // 8个工位爪臂配置
-  const arms = useMemo(() => {
-    const isWorking = currentPhase !== 'idle' && currentPhase !== 'reset'
-    const isCutting = currentPhase === 'cutting'
-
-    // 各工位的工具配置和动作（参照真实机器照片）
-    return [
-      // 工位0 (上方) - 送线位置附近
-      { 
-        index: 0, 
-        angle: Math.PI * 0.5,
-        camSwing: Math.sin(camAngle) * 0.03, 
-        extension: isWorking ? 0.4 : 0, 
-        toolType: 'striker' as const, 
-        color: '#94a3b8' 
-      },
-      // 工位1 (右上 45°) - 曲线规
-      { 
-        index: 1, 
-        angle: Math.PI * 0.25, 
-        camSwing: Math.sin(camAngle + 0.5) * 0.04, 
-        extension: isWorking ? 0.7 : 0, 
-        toolType: 'curveGuide' as const, 
-        color: '#eab308' 
-      },
-      // 工位2 (右 0°) - 撞刀
-      { 
-        index: 2, 
-        angle: 0, 
-        camSwing: Math.sin(camAngle + 1) * 0.05, 
-        extension: isWorking ? 0.5 + Math.sin(camAngle) * 0.2 : 0, 
-        toolType: 'striker' as const, 
-        color: '#ec4899' 
-      },
-      // 工位3 (右下 -45°) - 曲线规
-      { 
-        index: 3, 
-        angle: -Math.PI * 0.25, 
-        camSwing: Math.sin(camAngle + 1.5) * 0.04, 
-        extension: isWorking ? 0.6 : 0, 
-        toolType: 'curveGuide' as const, 
-        color: '#6366f1' 
-      },
-      // 工位4 (下 -90°) - 撞刀
-      { 
-        index: 4, 
-        angle: -Math.PI * 0.5, 
-        camSwing: -Math.sin(camAngle) * 0.04, 
-        extension: isWorking ? 0.55 : 0, 
-        toolType: 'striker' as const, 
-        color: '#22c55e' 
-      },
-      // 工位5 (左下 -135°) - 切刀
-      { 
-        index: 5, 
-        angle: -Math.PI * 0.75, 
-        camSwing: 0, 
-        extension: isCutting ? 0.9 : 0, 
-        toolType: 'cutter' as const, 
-        color: '#f97316' 
-      },
-      // 工位6 (左 180°) - 曲线规
-      { 
-        index: 6, 
-        angle: Math.PI, 
-        camSwing: Math.sin(camAngle + 2) * 0.04, 
-        extension: isWorking ? 0.5 : 0, 
-        toolType: 'curveGuide' as const, 
-        color: '#8b5cf6' 
-      },
-      // 工位7 (左上 135°) - 撞刀
-      { 
-        index: 7, 
-        angle: Math.PI * 0.75, 
-        camSwing: Math.sin(camAngle + 2.5) * 0.03, 
-        extension: isWorking ? 0.45 : 0, 
-        toolType: 'striker' as const, 
-        color: '#14b8a6' 
-      },
-    ]
-  }, [currentPhase, camAngle])
-
-  return (
-    <group>
-      {arms.map((arm) => (
-        <WorkArm key={arm.index} {...arm} />
-      ))}
-    </group>
-  )
-}
-
-/** 成形点指示 - 弹簧在机械臂工作区成形 */
+/** 成形点指示 - 3点弯曲成形区 */
 function FormingPointIndicator(): ReactNode {
   return (
-    <group position={[0, 0, 30]}>
+    <group position={[0, 0, 5]}>
       {/* 发光环指示成形点 */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[12, 0.25, 8, 32]} />
+        <torusGeometry args={[15, 0.3, 8, 32]} />
         <meshStandardMaterial 
           color="#22d3ee" 
           emissive="#22d3ee"
@@ -366,24 +307,50 @@ function FormingPointIndicator(): ReactNode {
   )
 }
 
+/**
+ * 主组件 - 卷簧机完整结构
+ * 
+ * 布局（参照图片）：
+ *           切刀(上方)
+ *              ↓
+ *     ┌───────────────┐
+ *     │  上圈径杆  ←─┐│
+ *     │              ││
+ * 导向板→━━━┳━━━━━━━┫│ ← 芯轴(半圆)
+ *  送线    ┃        ││
+ *     │  下圈径杆  ←─┘│
+ *     │               │
+ *     └───────────────┘
+ *            │
+ *         节距杆(侧面)
+ */
 export function MachineArms(): ReactNode {
   return (
     <group>
-      {/* 
-       * 八爪弹簧机布局（参照实际机器）：
-       * - 面板在后方，8个工位爪臂安装在面板前面
-       * - 芯棒从面板中心穿过，延伸到爪臂工作区域
-       * - 弹簧线从后方通过中心送入，绕芯棒成形
-       * - 爪臂工具向中心（芯棒）方向工作
-       * - 弹簧成形后从芯棒前端推出
-       * - 切刀在完成后切断弹簧线
-       */}
-      <group position={[0, 0, -20]}>
-        <CenterPanel />
-        <Arbor />
-        <EightArmSystem />
+      <group position={[0, 0, 0]}>
+        {/* 机架底座 */}
+        <MachineBase />
+        
+        {/* 半圆形芯轴 - 钢丝绕此弯曲成形 */}
+        <SemiCircularArbor />
+        
+        {/* 上圈径杆 - 形成上弯曲点 */}
+        <UpperCoilingRod />
+        
+        {/* 下圈径杆 - 形成下弯曲点 */}
+        <LowerCoilingRod />
+        
+        {/* 节距杆 - 控制螺距 */}
+        <PitchTool />
+        
+        {/* 切刀 - 切断钢丝 */}
+        <Cutter />
+        
+        {/* 送线滚轮和导向板 */}
+        <FeedRollersAndGuide />
+        
+        {/* 成形点指示 */}
         <FormingPointIndicator />
-        <FeedMechanism />
       </group>
     </group>
   )

@@ -1,6 +1,7 @@
 import type { ChangeEvent, ReactNode } from 'react'
 import { useSpringStore } from '../../store/springStore'
 import { useSpringCalculation } from '../../hooks/useSpringCalculation'
+import type { VariablePitchSegment, ConicalGeometry } from '../../types'
 
 export function ParameterPanel(): ReactNode {
   const params = useSpringStore((s) => s.params)
@@ -19,6 +20,51 @@ export function ParameterPanel(): ReactNode {
     (e: ChangeEvent<HTMLSelectElement>) => {
       updateParam(key as never, e.target.value as never)
     }
+
+  // 更新锥形弹簧参数
+  const handleConicalChange = (field: keyof ConicalGeometry) =>
+    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const value = field === 'fromSmallToLarge' 
+        ? e.target.value === 'true'
+        : Number(e.target.value)
+      const newConical: ConicalGeometry = {
+        smallOuterDiameter: params.conicalGeometry?.smallOuterDiameter ?? 10,
+        largeOuterDiameter: params.conicalGeometry?.largeOuterDiameter ?? 20,
+        fromSmallToLarge: params.conicalGeometry?.fromSmallToLarge ?? true,
+        [field]: value
+      }
+      updateParam('conicalGeometry', newConical)
+    }
+
+  // 更新变节距弹簧参数
+  const handleVariablePitchChange = (index: number, field: keyof VariablePitchSegment) =>
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const value = Number(e.target.value)
+      const segments = [...(params.variablePitch ?? [])]
+      if (segments[index]) {
+        segments[index] = { ...segments[index], [field]: value }
+        updateParam('variablePitch', segments)
+      }
+    }
+
+  // 添加新的节距段
+  const addPitchSegment = () => {
+    const segments = [...(params.variablePitch ?? [])]
+    const lastEnd = segments.length > 0 ? segments[segments.length - 1].endTurn : 0
+    segments.push({
+      startTurn: lastEnd,
+      endTurn: lastEnd + 2,
+      pitch: params.pitch
+    })
+    updateParam('variablePitch', segments)
+  }
+
+  // 删除节距段
+  const removePitchSegment = (index: number) => {
+    const segments = [...(params.variablePitch ?? [])]
+    segments.splice(index, 1)
+    updateParam('variablePitch', segments)
+  }
 
   return (
     <div className="flex h-full flex-col gap-3 text-xs">
@@ -107,17 +153,117 @@ export function ParameterPanel(): ReactNode {
             />
             <span className="text-[10px] text-slate-500">≤N<sub>t</sub></span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-28 shrink-0 text-slate-300">节距 p (mm)</span>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              value={params.pitch}
-              onChange={handleNumberChange('pitch')}
-              className="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
-            />
-          </div>
+          {/* 标准节距 - 非变节距类型显示 */}
+          {params.type !== 'variablePitch' && (
+            <div className="flex items-center gap-2">
+              <span className="w-28 shrink-0 text-slate-300">节距 p (mm)</span>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={params.pitch}
+                onChange={handleNumberChange('pitch')}
+                className="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              />
+            </div>
+          )}
+
+          {/* 锥形弹簧专属参数 */}
+          {params.type === 'conical' && (
+            <div className="mt-2 space-y-2 rounded border border-amber-900/50 bg-amber-950/20 p-2">
+              <div className="text-[11px] font-medium text-amber-400">锥形参数</div>
+              <div className="flex items-center gap-2">
+                <span className="w-28 shrink-0 text-slate-300">小端外径 (mm)</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  value={params.conicalGeometry?.smallOuterDiameter ?? 10}
+                  onChange={handleConicalChange('smallOuterDiameter')}
+                  className="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-28 shrink-0 text-slate-300">大端外径 (mm)</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="1"
+                  value={params.conicalGeometry?.largeOuterDiameter ?? 20}
+                  onChange={handleConicalChange('largeOuterDiameter')}
+                  className="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-28 shrink-0 text-slate-300">锥形方向</span>
+                <select
+                  value={String(params.conicalGeometry?.fromSmallToLarge ?? true)}
+                  onChange={handleConicalChange('fromSmallToLarge')}
+                  className="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="true">小→大</option>
+                  <option value="false">大→小</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* 变节距弹簧专属参数 */}
+          {params.type === 'variablePitch' && (
+            <div className="mt-2 space-y-2 rounded border border-green-900/50 bg-green-950/20 p-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-green-400">节距分段</span>
+                <button
+                  onClick={addPitchSegment}
+                  className="rounded bg-green-700 px-2 py-0.5 text-[10px] text-white hover:bg-green-600"
+                >
+                  + 添加
+                </button>
+              </div>
+              {(params.variablePitch ?? []).map((segment, idx) => (
+                <div key={idx} className="flex items-center gap-1 text-[10px]">
+                  <span className="text-slate-400">圈</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={segment.startTurn}
+                    onChange={handleVariablePitchChange(idx, 'startTurn')}
+                    className="w-12 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                  <span className="text-slate-400">~</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={segment.endTurn}
+                    onChange={handleVariablePitchChange(idx, 'endTurn')}
+                    className="w-12 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                  <span className="text-slate-400">节距</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={segment.pitch}
+                    onChange={handleVariablePitchChange(idx, 'pitch')}
+                    className="w-14 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                  <span className="text-slate-400">mm</span>
+                  <button
+                    onClick={() => removePitchSegment(idx)}
+                    className="ml-1 rounded bg-red-800 px-1.5 py-0.5 text-[9px] text-white hover:bg-red-700"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {(params.variablePitch ?? []).length === 0 && (
+                <div className="text-[10px] text-slate-500">点击"添加"创建节距分段</div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <span className="w-28 shrink-0 text-slate-300">自由高度 H₀ (mm)</span>
             <input

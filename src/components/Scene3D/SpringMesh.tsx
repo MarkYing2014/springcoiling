@@ -204,7 +204,7 @@ function FallingSpring({
   })
 
   return (
-    <group ref={groupRef} position={[0, 0, 10]}>
+    <group ref={groupRef} position={[0, 0, 25]}>
       <mesh>
         <tubeGeometry
           args={[curve, 256, wireDiameter / 2, 16, false]}
@@ -268,7 +268,7 @@ export function SpringMesh(): ReactNode {
   // 切割阶段：显示即将被切断的线材（橙色）
   if (currentPhase === 'cutting') {
     return (
-      <group position={[0, 0, 5]}>
+      <group position={[0, 0, 20]}>
         <mesh>
           <tubeGeometry
             args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}
@@ -284,9 +284,9 @@ export function SpringMesh(): ReactNode {
   }
 
   // 加工过程：显示统一曲线（直线+弯曲+螺旋）
-  // 位置在芯轴处，钢丝从左侧水平进入
+  // 弹簧在工具前方生成(Z=20)，避免与圈径杆等干涉
   return (
-    <group position={[0, 0, 5]}>
+    <group position={[0, 0, 20]}>
       <mesh>
         <tubeGeometry
           args={[unifiedCurve, 256, params.wireDiameter / 2, 16, false]}

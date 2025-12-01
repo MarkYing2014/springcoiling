@@ -291,8 +291,8 @@ function FeedRollersAndGuide(): ReactNode {
 /** 成形点指示 - 3点弯曲成形区 */
 function FormingPointIndicator(): ReactNode {
   return (
-    <group position={[0, 0, 5]}>
-      {/* 发光环指示成形点 */}
+    <group position={[0, 0, 20]}>
+      {/* 发光环指示成形点 - 弹簧在此区域生成 */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[15, 0.3, 8, 32]} />
         <meshStandardMaterial 

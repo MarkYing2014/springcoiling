@@ -70,15 +70,14 @@ function getRadiusAtCoil(
  * 生成带平滑过渡的弹簧路径
  * 
  * 三段式路径结构（解决切向不连续问题）：
- * 1. 直线段：送料直线
- * 2. 过渡圆弧：90°~120°圆弧，实现切向连续过渡
- * 3. 标准螺旋：从圆弧末端开始的螺旋
+ * 1. 直线段：从后方(-Z)送料
+ * 2. 过渡展开：螺旋式展开，半径从0渐增到R
+ * 3. 标准螺旋：在X-Y平面绕圈，沿+Z生长
  * 
- * 几何布局：
- * - 导线沿-Y方向进入成形点
+ * 几何布局（与机械结构匹配）：
+ * - 导线沿-Z方向进入成形点
  * - 成形点在(0, 0, 0)
- * - 成形刀在+X方向，弯曲钢丝形成X-Y平面的圆弧
- * - 螺旋沿+Z方向生长
+ * - 螺旋在X-Y平面，沿+Z方向生长
  */
 function generateUnifiedWirePath(
   params: SpringParameters,
@@ -87,71 +86,66 @@ function generateUnifiedWirePath(
 ): Vector3[] {
   const points: Vector3[] = []
   const { meanDiameter, wireDiameter, pitch, totalCoils, type, variablePitch, conicalGeometry } = params
-  const R = meanDiameter / 2  // 螺旋半径
+  const R = meanDiameter / 2
   
   // ============================================
-  // 段1: 直线送料（沿-Y方向进入）
+  // 段1: 直线送料（从后方-Z进入）
   // ============================================
-  // 导线从 (0, -feedLength, 0) 到 (0, 0, 0)
-  const straightSamples = 8
+  const straightSamples = 10
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
-    const y = -feedLength * (1 - t)
-    points.push(new Vector3(0, y, 0))
+    const z = -feedLength * (1 - t)  // 从-feedLength到0
+    points.push(new Vector3(0, 0, z))
   }
   
   // ============================================
-  // 段2: 过渡圆弧（90°圆弧，切向连续）
+  // 段2: 螺旋式展开过渡（半圈）
   // ============================================
-  // 圆弧在X-Y平面，中心在(R, 0, 0)，半径R
-  // 起点A0 = (0, 0, 0)，切向方向(0, 1, 0)与直线方向一致
-  // 终点A1 = (R, R, 0)，切向方向(1, 0, 0)
-  // 绕圆心(R, 0, 0)从-90°转到0°
+  // 从(0,0,0)开始，半径从0逐渐增加到R
+  // 同时角度增加，形成平滑的螺旋展开
+  // 这样避免了切向突变
   
-  const arcSamples = 12
-  const arcSpan = Math.PI / 2  // 90度圆弧
-  const arcCenter = new Vector3(R, 0, 0)
-  const arcStartAngle = -Math.PI / 2  // 从-90°开始
+  const transitionSamples = 18  // 半圈
+  const transitionAngle = Math.PI  // 180度展开
   
-  // 过渡圆弧期间，Z轴也有微小前进（约半个螺距的1/4）
-  const arcZAdvance = pitch * 0.1
-  
-  for (let i = 1; i <= arcSamples; i++) {
-    const t = i / arcSamples
-    const angle = arcStartAngle + arcSpan * t  // -90° → 0°
-    const x = arcCenter.x + R * Math.cos(angle)
-    const y = arcCenter.y + R * Math.sin(angle)
-    const z = arcZAdvance * t
+  for (let i = 1; i <= transitionSamples; i++) {
+    const t = i / transitionSamples  // 0 → 1
+    const angle = t * transitionAngle  // 0 → π
+    
+    // 半径用正弦平滑：从0到R
+    const currentR = R * Math.sin(t * Math.PI / 2)
+    
+    // 位置
+    const x = currentR * Math.cos(angle)
+    const y = currentR * Math.sin(angle)
+    const z = t * pitch * 0.5  // 半圈的螺距
+    
     points.push(new Vector3(x, y, z))
   }
   
   // ============================================
-  // 段3: 标准螺旋（从圆弧末端开始）
+  // 段3: 标准螺旋（从展开末端开始）
   // ============================================
-  // 圆弧末端在(2R, 0, arcZAdvance)，角度θ=0
-  // 螺旋从这里开始，绕中心(R, 0, z)旋转
-  
   const coilsToRender = Math.min(currentCoils, totalCoils)
-  if (coilsToRender > 0.1) {
+  if (coilsToRender > 0.5) {
     const samplesPerCoil = 36
-    // 减去过渡圆弧占用的约0.25圈
-    const effectiveCoils = Math.max(0, coilsToRender - 0.25)
+    // 减去过渡占用的0.5圈
+    const effectiveCoils = Math.max(0, coilsToRender - 0.5)
     const totalSamples = Math.ceil(effectiveCoils * samplesPerCoil)
     
-    let axialPos = arcZAdvance
-    const spiralCenter = new Vector3(R, 0, 0)
+    // 从展开末端位置继续
+    let axialPos = pitch * 0.5
+    const startAngle = Math.PI  // 从180度继续
     
     for (let i = 1; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
-      const angle = coilNum * Math.PI * 2  // 从0开始
+      const angle = startAngle + coilNum * Math.PI * 2
       
-      // 获取当前圈的螺距和半径
-      const currentPitch = getPitchAtCoil(coilNum + 0.25, totalCoils, pitch, wireDiameter, type, variablePitch)
-      const currentRadius = getRadiusAtCoil(coilNum + 0.25, totalCoils, R, type, conicalGeometry)
+      const currentPitch = getPitchAtCoil(coilNum + 0.5, totalCoils, pitch, wireDiameter, type, variablePitch)
+      const currentRadius = getRadiusAtCoil(coilNum + 0.5, totalCoils, R, type, conicalGeometry)
       
-      // 螺旋绕中心(R, 0, z)旋转
-      const x = spiralCenter.x + currentRadius * Math.cos(angle)
-      const y = spiralCenter.y + currentRadius * Math.sin(angle)
+      const x = currentRadius * Math.cos(angle)
+      const y = currentRadius * Math.sin(angle)
       axialPos += currentPitch / samplesPerCoil
       
       points.push(new Vector3(x, y, axialPos))
@@ -163,7 +157,7 @@ function generateUnifiedWirePath(
 
 /**
  * 生成仅螺旋弹簧路径（切断后的独立弹簧）
- * 与成形路径保持一致的几何结构：中心偏移
+ * 标准螺旋，中心在原点
  */
 function generateSpringOnlyPath(params: SpringParameters): Vector3[] {
   const points: Vector3[] = []
@@ -173,7 +167,6 @@ function generateSpringOnlyPath(params: SpringParameters): Vector3[] {
   const totalSamples = Math.ceil(totalCoils * samplesPerCoil)
   
   let axialPos = 0
-  const spiralCenter = new Vector3(R, 0, 0)  // 与成形路径一致的中心
   
   for (let i = 0; i <= totalSamples; i++) {
     const coilNum = i / samplesPerCoil
@@ -182,8 +175,8 @@ function generateSpringOnlyPath(params: SpringParameters): Vector3[] {
     const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
     const currentRadius = getRadiusAtCoil(coilNum, totalCoils, R, type, conicalGeometry)
     
-    const x = spiralCenter.x + currentRadius * Math.cos(angle)
-    const y = spiralCenter.y + currentRadius * Math.sin(angle)
+    const x = currentRadius * Math.cos(angle)
+    const y = currentRadius * Math.sin(angle)
     if (i > 0) {
       axialPos += currentPitch / samplesPerCoil
     }

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useProcessStore } from '../../stores/processStore'
 import { useSpringStore } from '../../store/springStore'
+import { EightJawMachine } from './EightJawMachine'
 
 /**
  * 4+1轴压簧机 - 标准坐标系
@@ -169,9 +170,10 @@ function _CuttingAxis(): ReactNode {
 }
 
 /**
- * 成形点指示 - 弹簧在此区域形成
+ * 成形点指示 - 弹簧在此区域形成 (备用)
  */
-function FormingZone(): ReactNode {
+// @ts-ignore
+function _FormingZone(): ReactNode {
   return (
     <group position={[0, 0, 0]}>
       {/* 成形点发光环 */}
@@ -258,9 +260,10 @@ function Arm({ angle, color, toolType, radiusOverride, yOffset = 0, zOffset = 0,
 }
 
 /**
- * 八爪机械臂系统 - 环形排列
+ * 八爪机械臂系统 - 环形排列 (旧版备用)
  */
-function EightArmSystem(): ReactNode {
+// @ts-ignore
+function _EightArmSystem(): ReactNode {
   const axisPositions = useProcessStore((s) => s.axisPositions)
   const params = useSpringStore((s) => s.params)
   const R = params.meanDiameter / 2
@@ -308,9 +311,10 @@ function EightArmSystem(): ReactNode {
 }
 
 /**
- * 中心面板 - 八爪机的中心
+ * 中心面板 - 八爪机的中心 (旧版备用)
  */
-function CenterPanel(): ReactNode {
+// @ts-ignore
+function _CenterPanel(): ReactNode {
   return (
     <group position={[0, 0, -5]}>
       {/* 方形中心面板 */}
@@ -345,14 +349,8 @@ function CenterPanel(): ReactNode {
 export function MachineArms(): ReactNode {
   return (
     <group>
-      {/* 中心面板 */}
-      <CenterPanel />
-      
-      {/* 八爪机械臂系统 */}
-      <EightArmSystem />
-      
-      {/* 成形区指示 */}
-      <FormingZone />
+      {/* 新版八爪机 - 基于配置的模块化设计 */}
+      <EightJawMachine />
       
       {/* 保留送料机构 */}
       <FeedAxis />

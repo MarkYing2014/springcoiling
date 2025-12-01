@@ -91,17 +91,21 @@ function generateUnifiedWirePath(
     points.push(new Vector3(x, 0, 0))
   }
   
-  // === 第二段：弯曲过渡（被圈径杆弯曲）===
-  const bendSamples = 18
+  // === 第二段：直接开始螺旋（紧凑过渡）===
   // 起始半径（可能因锥形而变化）
   const startRadius = getRadiusAtCoil(0, totalCoils, baseRadius, type, conicalGeometry)
   
-  for (let i = 1; i <= bendSamples; i++) {
-    const t = i / bendSamples
-    const bendAngle = t * Math.PI * 0.5
-    const x = startRadius * (1 - Math.cos(bendAngle))
-    const y = startRadius * Math.sin(bendAngle)
-    const z = t * wireDiameter * 0.3
+  // 简化过渡：直接从直线端点开始螺旋
+  // 添加几个点平滑过渡到第一圈
+  const transitionSamples = 6
+  for (let i = 1; i <= transitionSamples; i++) {
+    const t = i / transitionSamples
+    // 逐渐建立螺旋半径
+    const r = startRadius * t * 0.5
+    const angle = t * Math.PI * 0.3  // 小角度过渡
+    const x = r * Math.cos(angle)
+    const y = r * Math.sin(angle)
+    const z = t * wireDiameter * 0.2
     points.push(new Vector3(x, y, z))
   }
   
@@ -111,8 +115,8 @@ function generateUnifiedWirePath(
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    const startAngle = Math.PI * 0.5
-    let axialPos = wireDiameter * 0.3
+    const startAngle = Math.PI * 0.3  // 接续过渡段的角度
+    let axialPos = wireDiameter * 0.2
     
     for (let i = 1; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil

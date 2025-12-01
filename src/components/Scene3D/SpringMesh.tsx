@@ -85,24 +85,24 @@ function generateUnifiedWirePath(
   
   // === 弹簧成形原理 ===
   // 钢丝沿-Z方向进入（与弹簧轴向一致）
-  // 在成形点被圈径杆弯曲，形成X-Y平面的圆圈
+  // 在成形点被成形刀弯曲，逐渐形成X-Y平面的圆圈
   // 弹簧沿Z轴正方向生长
   
   // === 第一段：直线送料（沿-Z方向进入）===
-  const straightSamples = 12
+  const straightSamples = 10
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
-    const z = -feedLength * (1 - t)  // 从-feedLength到0
+    const z = -feedLength * (1 - t)
     points.push(new Vector3(0, 0, z))
   }
   
-  // === 第二段：螺旋弹簧（X-Y平面圆周，Z轴生长）===
+  // === 第二段：螺旋弹簧 ===
   const coilsToRender = Math.min(currentCoils, totalCoils)
   if (coilsToRender > 0.05) {
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    let axialPos = 0  // Z轴位置
+    let axialPos = 0
     
     for (let i = 0; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
@@ -110,7 +110,16 @@ function generateUnifiedWirePath(
       
       // 获取当前圈的螺距和半径
       const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
-      const currentRadius = getRadiusAtCoil(coilNum, totalCoils, baseRadius, type, conicalGeometry)
+      let currentRadius = getRadiusAtCoil(coilNum, totalCoils, baseRadius, type, conicalGeometry)
+      
+      // 【关键】前半圈平滑过渡：半径从0逐渐增加到目标值
+      // 模拟钢丝被成形刀逐渐弯曲的过程
+      if (coilNum < 0.5) {
+        // 前半圈使用正弦平滑过渡
+        const transitionProgress = coilNum / 0.5  // 0 → 1
+        const smoothFactor = Math.sin(transitionProgress * Math.PI / 2)  // 0 → 1 平滑
+        currentRadius = currentRadius * smoothFactor
+      }
       
       // X-Y平面的圆周运动
       const x = currentRadius * Math.cos(angle)

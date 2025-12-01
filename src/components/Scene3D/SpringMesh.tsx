@@ -9,6 +9,7 @@ import type { SpringParameters, VariablePitchSegment, ConicalGeometry } from '..
 
 /**
  * 根据弹簧类型计算当前圈的螺距
+ * 使用平滑过渡避免突变导致的直线段
  */
 function getPitchAtCoil(
   coilNum: number,
@@ -18,13 +19,7 @@ function getPitchAtCoil(
   springType: string,
   variablePitch?: VariablePitchSegment[]
 ): number {
-  // 首圈和末圈紧密
-  if (coilNum < 1) {
-    return wireDiameter * 1.1
-  }
-  if (coilNum > totalCoils - 1 && totalCoils > 2) {
-    return wireDiameter * 1.1
-  }
+  const tightPitch = wireDiameter * 1.1  // 紧密圈螺距
   
   // 变节距弹簧
   if (springType === 'variablePitch' && variablePitch && variablePitch.length > 0) {
@@ -33,6 +28,30 @@ function getPitchAtCoil(
         return segment.pitch
       }
     }
+  }
+  
+  // 首圈过渡区（0 ~ 1.5圈）：从紧密圈平滑过渡到正常螺距
+  if (coilNum < 1.5) {
+    if (coilNum < 0.5) {
+      // 前半圈完全紧密
+      return tightPitch
+    }
+    // 0.5 ~ 1.5 圈：平滑过渡
+    const t = (coilNum - 0.5) / 1.0  // 0 → 1
+    const smoothT = t * t * (3 - 2 * t)  // smoothstep
+    return tightPitch + (basePitch - tightPitch) * smoothT
+  }
+  
+  // 末圈过渡区
+  if (coilNum > totalCoils - 1.5 && totalCoils > 3) {
+    if (coilNum > totalCoils - 0.5) {
+      // 最后半圈完全紧密
+      return tightPitch
+    }
+    // 平滑过渡
+    const t = (totalCoils - 0.5 - coilNum) / 1.0  // 1 → 0
+    const smoothT = t * t * (3 - 2 * t)
+    return tightPitch + (basePitch - tightPitch) * smoothT
   }
   
   return basePitch

@@ -67,66 +67,51 @@ function getRadiusAtCoil(
 }
 
 /**
- * 生成弹簧路径 - 简单直观的坐标系
+ * 生成弹簧路径 - 只显示已成形的螺旋部分
  * 
- * 坐标系（标准机床视角）：
- * - 送线从后方(-Z)进入
+ * 关键原理（来自真实机床）：
+ * - 线材在成形点被弯曲后，形状就"冻结"了
+ * - 只显示已经成形的螺旋，不显示送料直线
+ * - 成形点固定在Z=0，弹簧向+Z方向生长
+ * 
+ * 坐标系：
+ * - 成形点在原点(0,0,0)
  * - 螺旋在X-Y平面
- * - 弹簧沿+Z方向生长（向观察者方向）
- * 
- * 俯视图（从+Z看向原点）：
- *        +Y
- *         ↑
- *         │   
- *   ──────┼──────→ +X
- *         │ ○ 螺旋圈
- *         │
- * 
- * 侧视图（从+X看）：
- *   送线 ──────●──────→ 弹簧生长 (+Z)
- *              成形点
+ * - 弹簧沿+Z方向生长
  */
 function generateUnifiedWirePath(
   params: SpringParameters,
   currentCoils: number,
-  feedLength: number
+  _feedLength: number  // 暂不使用，保留接口
 ): Vector3[] {
   const points: Vector3[] = []
   const { meanDiameter, wireDiameter, pitch, totalCoils, type, variablePitch, conicalGeometry } = params
   const R = meanDiameter / 2
   
-  // ============================================
-  // 段1: 直线送料（从后方-Z进入）
-  // ============================================
-  const straightSamples = 10
-  for (let i = 0; i < straightSamples; i++) {
-    const t = i / straightSamples
-    const z = -feedLength * (1 - t)  // 从-feedLength到0
-    points.push(new Vector3(0, 0, z))
+  // 只生成已成形的螺旋部分（没有送料直线段）
+  const coilsToRender = Math.min(currentCoils, totalCoils)
+  
+  if (coilsToRender < 0.05) {
+    // 还没开始成形，返回最小路径
+    return [new Vector3(R, 0, 0), new Vector3(R, 0.1, 0)]
   }
   
-  // ============================================
-  // 段2: 螺旋弹簧（X-Y平面，沿+Z生长）
-  // ============================================
-  const coilsToRender = Math.min(currentCoils, totalCoils)
-  if (coilsToRender > 0.05) {
-    const samplesPerCoil = 36
-    const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
+  const samplesPerCoil = 36
+  const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
+  
+  for (let i = 0; i <= totalSamples; i++) {
+    const coilNum = i / samplesPerCoil
+    const angle = coilNum * Math.PI * 2
     
-    for (let i = 0; i <= totalSamples; i++) {
-      const coilNum = i / samplesPerCoil
-      const angle = coilNum * Math.PI * 2
-      
-      const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
-      const currentRadius = getRadiusAtCoil(coilNum, totalCoils, R, type, conicalGeometry)
-      
-      // 标准螺旋：X-Y平面圆周，Z轴前进
-      const x = currentRadius * Math.cos(angle)
-      const y = currentRadius * Math.sin(angle)
-      const z = coilNum * currentPitch
-      
-      points.push(new Vector3(x, y, z))
-    }
+    const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
+    const currentRadius = getRadiusAtCoil(coilNum, totalCoils, R, type, conicalGeometry)
+    
+    // 标准螺旋：X-Y平面圆周，Z轴前进
+    const x = currentRadius * Math.cos(angle)
+    const y = currentRadius * Math.sin(angle)
+    const z = coilNum * currentPitch
+    
+    points.push(new Vector3(x, y, z))
   }
   
   return points

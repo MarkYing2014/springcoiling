@@ -192,13 +192,24 @@ function FormingZone(): ReactNode {
 /**
  * 单个机械臂 - 静态展示
  */
-function Arm({ angle, color, toolType }: { angle: number; color: string; toolType: 'rod' | 'blade' | 'roller' }): ReactNode {
-  const radius = 25  // 距离中心的半径
+interface ArmProps {
+  angle: number
+  color: string
+  toolType: 'rod' | 'blade' | 'roller'
+  radiusOverride?: number
+  yOffset?: number
+  zOffset?: number
+  glow?: boolean
+}
+
+function Arm({ angle, color, toolType, radiusOverride, yOffset = 0, zOffset = 0, glow }: ArmProps): ReactNode {
+  const baseRadius = 25
+  const radius = radiusOverride ?? baseRadius
   const x = radius * Math.cos(angle)
-  const y = radius * Math.sin(angle)
+  const y = radius * Math.sin(angle) + yOffset
   
   return (
-    <group position={[x, y, 0]} rotation={[0, 0, angle + Math.PI]}>
+    <group position={[x, y, zOffset]} rotation={[0, 0, angle + Math.PI]}>
       {/* 滑轨底座 */}
       <mesh position={[0, 0, -3]}>
         <boxGeometry args={[6, 4, 8]} />
@@ -215,13 +226,25 @@ function Arm({ angle, color, toolType }: { angle: number; color: string; toolTyp
       {toolType === 'rod' && (
         <mesh position={[-15, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[1.5, 1.5, 6, 16]} />
-          <meshStandardMaterial color={color} metalness={0.7} roughness={0.25} />
+          <meshStandardMaterial
+            color={color}
+            metalness={0.7}
+            roughness={0.25}
+            emissive={glow ? color : '#000000'}
+            emissiveIntensity={glow ? 0.5 : 0}
+          />
         </mesh>
       )}
       {toolType === 'blade' && (
         <mesh position={[-15, 0, 0]} rotation={[0, 0, Math.PI / 4]}>
           <boxGeometry args={[1, 5, 3]} />
-          <meshStandardMaterial color={color} metalness={0.8} roughness={0.15} />
+          <meshStandardMaterial
+            color={color}
+            metalness={0.8}
+            roughness={0.15}
+            emissive={glow ? color : '#000000'}
+            emissiveIntensity={glow ? 0.6 : 0}
+          />
         </mesh>
       )}
       {toolType === 'roller' && (
@@ -238,22 +261,44 @@ function Arm({ angle, color, toolType }: { angle: number; color: string; toolTyp
  * 八爪机械臂系统 - 环形排列
  */
 function EightArmSystem(): ReactNode {
-  // 8个臂的配置
+  const axisPositions = useProcessStore((s) => s.axisPositions)
+  const params = useSpringStore((s) => s.params)
+  const R = params.meanDiameter / 2
+
+  const coilingPos = axisPositions?.coiling ?? 0
+  const pitchPos = axisPositions?.pitch ?? 0
+  const cutPos = axisPositions?.cut ?? 30
+
+  // 动态位移
+  const formingRadius = Math.max(12, R + 10 - coilingPos * 0.25)
+  const pitchZ = pitchPos * 0.1
+  const cutY = -cutPos * 0.25
+
+  // 8个臂的配置（含动态属性）
   const arms = [
-    { angle: 0, color: '#f59e0b', toolType: 'rod' as const },           // 0° - 成形杆 (黄)
-    { angle: Math.PI / 4, color: '#10b981', toolType: 'rod' as const },  // 45° - 节距杆 (绿)
-    { angle: Math.PI / 2, color: '#ef4444', toolType: 'blade' as const }, // 90° - 切刀 (红)
-    { angle: 3 * Math.PI / 4, color: '#8b5cf6', toolType: 'roller' as const }, // 135° - 辅助轮 (紫)
-    { angle: Math.PI, color: '#f59e0b', toolType: 'rod' as const },       // 180° - 成形杆 (黄)
-    { angle: 5 * Math.PI / 4, color: '#10b981', toolType: 'rod' as const }, // 225° - 节距杆 (绿)
-    { angle: 3 * Math.PI / 2, color: '#3b82f6', toolType: 'blade' as const }, // 270° - 备用刀 (蓝)
-    { angle: 7 * Math.PI / 4, color: '#8b5cf6', toolType: 'roller' as const }, // 315° - 辅助轮 (紫)
+    { angle: 0, color: '#facc15', toolType: 'rod' as const, radiusOverride: formingRadius, glow: true },
+    { angle: Math.PI / 4, color: '#10b981', toolType: 'rod' as const, zOffset: pitchZ, glow: true },
+    { angle: Math.PI / 2, color: '#ef4444', toolType: 'blade' as const, yOffset: cutY, glow: true },
+    { angle: 3 * Math.PI / 4, color: '#8b5cf6', toolType: 'roller' as const },
+    { angle: Math.PI, color: '#f59e0b', toolType: 'rod' as const },
+    { angle: 5 * Math.PI / 4, color: '#10b981', toolType: 'rod' as const },
+    { angle: 3 * Math.PI / 2, color: '#3b82f6', toolType: 'blade' as const },
+    { angle: 7 * Math.PI / 4, color: '#8b5cf6', toolType: 'roller' as const },
   ]
-  
+
   return (
     <group>
       {arms.map((arm, index) => (
-        <Arm key={index} angle={arm.angle} color={arm.color} toolType={arm.toolType} />
+        <Arm
+          key={index}
+          angle={arm.angle}
+          color={arm.color}
+          toolType={arm.toolType}
+          radiusOverride={arm.radiusOverride}
+          yOffset={arm.yOffset}
+          zOffset={arm.zOffset}
+          glow={arm.glow}
+        />
       ))}
     </group>
   )

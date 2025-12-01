@@ -84,51 +84,36 @@ function generateUnifiedWirePath(
   const baseRadius = meanDiameter / 2
   
   // === 第一段：水平直线段（从导向板到成形点）===
-  const straightSamples = 15
+  const straightSamples = 12
   for (let i = 0; i < straightSamples; i++) {
     const t = i / straightSamples
     const x = -feedLength * (1 - t)
     points.push(new Vector3(x, 0, 0))
   }
   
-  // === 第二段：直接开始螺旋（紧凑过渡）===
-  // 起始半径（可能因锥形而变化）
-  const startRadius = getRadiusAtCoil(0, totalCoils, baseRadius, type, conicalGeometry)
-  
-  // 简化过渡：直接从直线端点开始螺旋
-  // 添加几个点平滑过渡到第一圈
-  const transitionSamples = 6
-  for (let i = 1; i <= transitionSamples; i++) {
-    const t = i / transitionSamples
-    // 逐渐建立螺旋半径
-    const r = startRadius * t * 0.5
-    const angle = t * Math.PI * 0.3  // 小角度过渡
-    const x = r * Math.cos(angle)
-    const y = r * Math.sin(angle)
-    const z = t * wireDiameter * 0.2
-    points.push(new Vector3(x, y, z))
-  }
-  
-  // === 第三段：螺旋弹簧段 ===
+  // === 第二段：螺旋弹簧（直接从原点开始）===
   const coilsToRender = Math.min(currentCoils, totalCoils)
-  if (coilsToRender > 0.1) {
+  if (coilsToRender > 0.05) {
     const samplesPerCoil = 36
     const totalSamples = Math.ceil(coilsToRender * samplesPerCoil)
     
-    const startAngle = Math.PI * 0.3  // 接续过渡段的角度
-    let axialPos = wireDiameter * 0.2
+    let axialPos = 0
     
-    for (let i = 1; i <= totalSamples; i++) {
+    for (let i = 0; i <= totalSamples; i++) {
       const coilNum = i / samplesPerCoil
-      const angle = startAngle + coilNum * Math.PI * 2
+      const angle = coilNum * Math.PI * 2
       
       // 获取当前圈的螺距和半径
       const currentPitch = getPitchAtCoil(coilNum, totalCoils, pitch, wireDiameter, type, variablePitch)
       const currentRadius = getRadiusAtCoil(coilNum, totalCoils, baseRadius, type, conicalGeometry)
       
+      // X-Y平面的圆周运动，Z轴轴向生长
       const x = currentRadius * Math.cos(angle)
       const y = currentRadius * Math.sin(angle)
-      axialPos += currentPitch / samplesPerCoil
+      
+      if (i > 0) {
+        axialPos += currentPitch / samplesPerCoil
+      }
       
       points.push(new Vector3(x, y, axialPos))
     }

@@ -131,25 +131,25 @@ function Jaw({
 }
 
 /**
- * Base plate with center hole
+ * Base plate with center hole - 垂直于Z轴（弹簧轴）
  */
 function BasePlate(): ReactNode {
   return (
     <group position={[0, 0, -8]}>
-      {/* Main plate */}
-      <mesh>
+      {/* Main plate - 旋转使圆盘面朝Z轴 */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[45, 45, 6, 32]} />
         <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.6} />
       </mesh>
       
       {/* Center hole rim */}
-      <mesh position={[0, 0, 3.5]}>
+      <mesh position={[0, 0, 3.5]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[10, 1, 8, 32]} />
         <meshStandardMaterial color="#111827" metalness={0.5} roughness={0.4} />
       </mesh>
       
       {/* Center opening indicator */}
-      <mesh position={[0, 0, 4]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0, 4]}>
         <ringGeometry args={[8, 10, 32]} />
         <meshStandardMaterial 
           color="#22d3ee" 

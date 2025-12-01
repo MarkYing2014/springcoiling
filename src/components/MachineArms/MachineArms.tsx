@@ -269,10 +269,13 @@ function EightArmSystem(): ReactNode {
   const pitchPos = axisPositions?.pitch ?? 0
   const cutPos = axisPositions?.cut ?? 30
 
-  // 动态位移
-  const formingRadius = Math.max(12, R + 10 - coilingPos * 0.25)
-  const pitchZ = pitchPos * 0.1
-  const cutY = -cutPos * 0.25
+  // 动态位移（修正方向）
+  // 成形杆：coilingPos越大，越靠近中心（半径越小）
+  const formingRadius = Math.max(12, 25 - (coilingPos - R) * 0.3)
+  // 节距杆：pitchPos越大，沿+Z方向前进
+  const pitchZ = -pitchPos * 0.1
+  // 切刀：cutPos越小，越靠近中心（向下）
+  const cutY = (cutPos - 15) * 0.3
 
   // 8个臂的配置（含动态属性）
   const arms = [
